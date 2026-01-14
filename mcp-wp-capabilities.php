@@ -4,8 +4,8 @@
  * Plugin URI: https://github.com/your-org/mcp-wp-capabilities
  * Description: Comprehensive WordPress capabilities for MCP (Model Context Protocol) integration
  * Version: 1.0.0
- * Author: Your Name
- * Author URI: https://example.com
+ * Author: Chris
+ * Author URI: https://mild.se
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0-or-later.html
  * Text Domain: mcp-wp-capabilities
@@ -62,6 +62,16 @@ function mcp_wp_capabilities_init() {
 }
 add_action( 'plugins_loaded', 'mcp_wp_capabilities_init' );
 
+// Also register callbacks on rest_api_init to ensure they're registered in time
+add_action(
+	'rest_api_init',
+	static function () {
+		add_action( 'wp_abilities_api_categories_init', 'mcp_wp_capabilities_register_category' );
+		add_action( 'wp_abilities_api_init', 'mcp_wp_capabilities_register_abilities' );
+	},
+	5  // Before MCP Adapter (which runs at 15)
+);
+
 /**
  * Register the ability category
  */
@@ -86,6 +96,24 @@ function mcp_wp_capabilities_register_abilities() {
 	if ( ! function_exists( 'wp_register_ability' ) ) {
 		return;
 	}
+
+	// Register a simple test ability first
+	wp_register_ability(
+		'mcp-wp/test',
+		array(
+			'label'               => 'Test Ability',
+			'description'         => 'A simple test ability',
+			'category'            => 'mcp-wp',
+			'input_schema'        => array( 'type' => 'object' ),
+			'output_schema'       => array( 'type' => 'object' ),
+			'permission_callback' => static function () {
+				return true;
+			},
+			'execute_callback'    => static function () {
+				return array( 'success' => true, 'message' => 'Test ability works!' );
+			},
+		)
+	);
 
 	require_once MCP_WP_CAPABILITIES_DIR . 'data/abilities.php';
 	require_once MCP_WP_CAPABILITIES_DIR . 'data/class-ability-helpers.php';
