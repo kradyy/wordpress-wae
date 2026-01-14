@@ -122,12 +122,40 @@ function mcp_wp_capabilities_register_abilities() {
 	mcp_wp_capabilities_register_all_abilities();
 }
 
-/**
- * Register the MCP server
- */
+// Register the MCP server
+// Using the action hook mcp_adapter_init ensures we don't create the server too soon
 add_action(
 	'mcp_adapter_init',
 	function ( $adapter ) {
+		// Get all registered abilities with mcp-wp prefix
+		$all_abilities = array();
+		
+		// Manually list all abilities we want to expose
+		$abilities_to_expose = array(
+			'mcp-wp/test',
+			'mcp-wp/create-page',
+			'mcp-wp/edit-page',
+			'mcp-wp/get-page',
+			'mcp-wp/list-pages',
+			'mcp-wp/delete-page',
+			'mcp-wp/create-post',
+			'mcp-wp/edit-post',
+			'mcp-wp/get-post',
+			'mcp-wp/list-posts',
+			'mcp-wp/delete-post',
+		);
+		
+		// Filter to only include abilities that are actually registered
+		foreach ( $abilities_to_expose as $ability_id ) {
+			$ability = wp_get_ability( $ability_id );
+			if ( $ability ) {
+				$all_abilities[] = $ability_id;
+			}
+		}
+		
+		error_log( 'MCP Server: Registering with ' . count( $all_abilities ) . ' abilities' );
+		error_log( 'MCP Server: Abilities = ' . print_r( $all_abilities, true ) );
+		
 		$adapter->create_server(
 			'mcp-wp-capabilities-server',                    // Unique server identifier
 			'mcp',                                           // REST API namespace
@@ -140,23 +168,12 @@ add_action(
 			),
 			\WP\MCP\Infrastructure\ErrorHandling\ErrorLogMcpErrorHandler::class,     // Error handler
 			\WP\MCP\Infrastructure\Observability\NullMcpObservabilityHandler::class, // Observability handler
-			array(                                           // Abilities to expose as tools
-				'mcp-wp/test',
-				'mcp-wp/create-page',
-				'mcp-wp/edit-page',
-				'mcp-wp/get-page',
-				'mcp-wp/list-pages',
-				'mcp-wp/delete-page',
-				'mcp-wp/create-post',
-				'mcp-wp/edit-post',
-				'mcp-wp/get-post',
-				'mcp-wp/list-posts',
-				'mcp-wp/delete-post',
-			),
+			$all_abilities,                                  // Abilities to expose as tools
 			array(),                                         // Resources (optional)
 			array()                                          // Prompts (optional)
 		);
-	}
+	},
+	20  // Run after abilities are registered (default priority is 10)
 );
 
 /**

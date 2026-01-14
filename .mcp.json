@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "wordpress-playground": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@automattic/mcp-wordpress-remote@latest"
+      ],
+      "env": {
+        "WP_API_URL": "https://127.0.0.1:9443/wp-json/mcp/mcp-adapter-default-server",
+        "WP_API_USERNAME": "chris",
+        "WP_API_PASSWORD": "XmSn lp8w IhJa Laco SX6E vaph",
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
