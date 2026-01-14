@@ -123,6 +123,43 @@ function mcp_wp_capabilities_register_abilities() {
 }
 
 /**
+ * Register the MCP server
+ */
+add_action(
+	'mcp_adapter_init',
+	function ( $adapter ) {
+		$adapter->create_server(
+			'mcp-wp-capabilities-server',                    // Unique server identifier
+			'mcp',                                           // REST API namespace
+			'mcp-adapter-default-server',                    // REST API route
+			'MCP WordPress Capabilities',                    // Server name
+			'WordPress capabilities for MCP integration',    // Server description
+			'1.0.0',                                         // Server version
+			array(
+				\WP\MCP\Transport\HttpTransport::class,      // Transport methods
+			),
+			\WP\MCP\Infrastructure\ErrorHandling\ErrorLogMcpErrorHandler::class,     // Error handler
+			\WP\MCP\Infrastructure\Observability\NullMcpObservabilityHandler::class, // Observability handler
+			array(                                           // Abilities to expose as tools
+				'mcp-wp/test',
+				'mcp-wp/create-page',
+				'mcp-wp/edit-page',
+				'mcp-wp/get-page',
+				'mcp-wp/list-pages',
+				'mcp-wp/delete-page',
+				'mcp-wp/create-post',
+				'mcp-wp/edit-post',
+				'mcp-wp/get-post',
+				'mcp-wp/list-posts',
+				'mcp-wp/delete-post',
+			),
+			array(),                                         // Resources (optional)
+			array()                                          // Prompts (optional)
+		);
+	}
+);
+
+/**
  * Get plugin information
  */
 function mcp_wp_capabilities_get_plugin_info() {

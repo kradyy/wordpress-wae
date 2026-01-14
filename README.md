@@ -80,9 +80,37 @@ Comprehensive WordPress capabilities plugin for Model Context Protocol (MCP) int
 
 ## Installation
 
-1. Place plugin folder in `wp-content/plugins/`
-2. Requires WordPress 6.9+ with Abilities API built-in
+### Prerequisites
+1. WordPress 6.9+ (includes Abilities API)
+2. MCP Adapter plugin (download from [GitHub releases](https://github.com/WordPress/mcp-adapter/releases))
+
+### Steps
+1. Install and activate the MCP Adapter plugin
+2. Place this plugin folder in `wp-content/plugins/`
 3. Activate through WordPress admin
+4. Create an Application Password for API authentication (Users > Edit User > Application Passwords)
+
+### MCP Client Configuration
+
+Configure your MCP client (VS Code, Claude Desktop, etc.) with:
+
+```json
+{
+  "mcpServers": {
+    "wordpress": {
+      "command": "npx",
+      "args": ["-y", "@automattic/mcp-wordpress-remote@latest"],
+      "env": {
+        "WP_API_URL": "https://your-site.com/wp-json/mcp/mcp-adapter-default-server",
+        "WP_API_USERNAME": "your-username",
+        "WP_API_PASSWORD": "your-application-password"
+      }
+    }
+  }
+}
+```
+
+**Important**: Use HTTPS for the URL if your WordPress site uses SSL.
 
 ## Usage via MCP
 
@@ -157,16 +185,41 @@ mcp-wp-capabilities/
 
 ## Testing
 
-Each ability includes:
-- Input schema validation
-- Output schema definition
-- Permission checks
-- Error handling with meaningful messages
+The plugin includes diagnostic and test scripts:
 
-Test by:
-1. Discovering abilities via MCP
-2. Calling execute-ability with proper parameters
-3. Validating response structure matches schema
+### Quick Diagnostic
+```bash
+bash diagnose.sh
+```
+Checks WordPress connectivity, REST API, MCP namespace, and ability discovery.
+
+### Full Test Suite
+```bash
+bash tests.sh
+```
+Tests all 45 abilities via MCP protocol.
+
+### Manual Testing via MCP
+1. Initialize session and get tools list
+2. Call tools using the MCP protocol
+3. Tool names use underscores: `mcp-wp-create-page` (not `mcp-wp/create-page`)
+
+Example creating a page:
+```bash
+# Get session
+SESSION=$(curl -k -s -i -X POST "https://your-site.com/wp-json/mcp/mcp-adapter-default-server" \
+  -u "username:password" \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' \
+  | grep -i 'mcp-session-id' | cut -d' ' -f2 | tr -d '\r')
+
+# Create page
+curl -k -s -X POST "https://your-site.com/wp-json/mcp/mcp-adapter-default-server" \
+  -u "username:password" \
+  -H 'Content-Type: application/json' \
+  -H "Mcp-Session-Id: $SESSION" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"mcp-wp-create-page","arguments":{"title":"My Page","content":"Page content","status":"publish"}}}'
+```
 
 ## Version
 
@@ -174,7 +227,7 @@ Version: 1.0.0
 
 ## License
 
-GPL-2.0-or-later
+MIT License - see LICENSE file for details
 
 ## Contributing
 
