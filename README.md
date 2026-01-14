@@ -1,4 +1,4 @@
-# MCP WordPress Capabilities
+# WordPress Abilities Extended
 
 Comprehensive WordPress capabilities plugin for Model Context Protocol (MCP) integration. Provides 45 carefully designed abilities enabling AI agents to interact with WordPress programmatically.
 
