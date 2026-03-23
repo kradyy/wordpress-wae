@@ -1,98 +1,166 @@
-# MCP WordPress Capabilities
+# WordPress Abilities Extended (WAE)
 
-Comprehensive WordPress capabilities plugin for Model Context Protocol (MCP) integration. Provides 45 carefully designed abilities enabling AI agents to interact with WordPress programmatically.
+WordPress MCP capability plugin built on top of the WordPress Abilities API and MCP Adapter.
 
-## Features
+This plugin currently exposes **84 public `mcp-wp/*` abilities** on the MCP endpoint and is designed for AI agent workflows.
 
-- **45 WordPress Abilities** organized in 8 logical groups
-- **Full CRUD Operations** for pages, posts, patterns, users, media
-- **Gutenberg Integration** with pattern management and block validation
-- **Plugin & Theme Management** - list, activate, deactivate plugins and get theme info
-- **User Management** with role-based permissions
-- **Media Handling** with upload, list, and retrieval
-- **Taxonomy Operations** for categories and tags
-- **Advanced Features** including batch operations, pattern import/export, and item cloning
-- **Proper Security** with capability checks and input validation
-- **MCP Protocol Support** with public abilities exposed via MCP
+## What It Covers
 
-## Abilities Overview
+- Full CRUD for posts/pages
+- Full CRUD for comments
+- Generic CPT CRUD (`post_type`-driven)
+- Menu CRUD (menus, menu items, menu locations)
+- Pattern CRUD + block validation
+- Media upload/list/get/edit/replace/delete
+- Taxonomy list/create/edit/delete
+- User list/get/current/create/edit
+- FSE block entities (`wp_navigation`, templates, template parts)
+- Controlled settings reads/writes (allowlisted updates)
+- Plugin/theme lifecycle operations (install/update/delete/activate/deactivate/switch)
+- Advanced helpers (batch update, clone, custom REST calls, pattern import/export)
 
-### Group 1: Page Management (1-10)
-- `mcp-wp/create-page` - Create new pages
-- `mcp-wp/edit-page` - Modify pages
-- `mcp-wp/get-page` - Retrieve page details
-- `mcp-wp/list-pages` - List pages with filtering
-- `mcp-wp/delete-page` - Delete pages
-- `mcp-wp/create-post` - Create posts
-- `mcp-wp/edit-post` - Modify posts
-- `mcp-wp/get-post` - Retrieve post details
-- `mcp-wp/list-posts` - List posts with filtering
-- `mcp-wp/delete-post` - Delete posts
+## Ability Modules
 
-### Group 2: Gutenberg Patterns & Blocks (11-17)
-- `mcp-wp/list-patterns` - List all Gutenberg patterns
-- `mcp-wp/get-pattern` - Get specific pattern
-- `mcp-wp/create-pattern` - Create new pattern
-- `mcp-wp/edit-pattern` - Modify pattern
-- `mcp-wp/delete-pattern` - Delete pattern
-- `mcp-wp/get-block-types` - List available blocks
-- `mcp-wp/validate-blocks` - Validate block JSON
+- `posts` (10)
+- `comments` (5)
+- `cpt` (5)
+- `menus` (10)
+- `fse` (5)
+- `patterns` (7)
+- `media` (6)
+- `users` (5)
+- `taxonomy` (6)
+- `settings` (4)
+- `plugins` (14)
+- `advanced` (7)
 
-### Group 3: Users & Permissions (18-22)
-- `mcp-wp/list-users` - List WordPress users
-- `mcp-wp/get-user` - Get user details
-- `mcp-wp/get-current-user` - Get authenticated user
-- `mcp-wp/create-user` - Create new user
-- `mcp-wp/edit-user` - Update user info
+Total: **84 abilities**
 
-### Group 4: Plugins & Theme (23-28)
-- `mcp-wp/list-plugins` - List installed plugins
-- `mcp-wp/get-plugin` - Get plugin details
-- `mcp-wp/activate-plugin` - Activate plugin
-- `mcp-wp/deactivate-plugin` - Deactivate plugin
-- `mcp-wp/get-theme` - Get theme information
-- `mcp-wp/get-theme-supports` - Get theme features
+## Full Ability List
 
-### Group 5: Settings & Configuration (29-31)
-- `mcp-wp/get-settings` - Get WordPress settings
-- `mcp-wp/get-gutenberg-settings` - Get block editor config
-- `mcp-wp/get-site-stats` - Get site statistics
+### posts
+- `mcp-wp/create-page`
+- `mcp-wp/edit-page`
+- `mcp-wp/get-page`
+- `mcp-wp/list-pages`
+- `mcp-wp/delete-page`
+- `mcp-wp/create-post`
+- `mcp-wp/edit-post`
+- `mcp-wp/get-post`
+- `mcp-wp/list-posts`
+- `mcp-wp/delete-post`
 
-### Group 6: Media & Assets (32-34)
-- `mcp-wp/upload-media` - Upload media files
-- `mcp-wp/list-media` - List media
-- `mcp-wp/get-media` - Get media details
+### comments
+- `mcp-wp/list-comments`
+- `mcp-wp/get-comment`
+- `mcp-wp/create-comment`
+- `mcp-wp/edit-comment`
+- `mcp-wp/delete-comment`
 
-### Group 7: Taxonomy (35-38)
-- `mcp-wp/list-categories` - List post categories
-- `mcp-wp/list-tags` - List post tags
-- `mcp-wp/create-category` - Create category
-- `mcp-wp/create-tag` - Create tag
+### cpt
+- `mcp-wp/list-content`
+- `mcp-wp/get-content`
+- `mcp-wp/create-content`
+- `mcp-wp/edit-content`
+- `mcp-wp/delete-content`
 
-### Group 8: Advanced (39-45)
-- `mcp-wp/custom-rest-call` - Make custom REST API calls
-- `mcp-wp/query-posts-advanced` - Advanced post queries
-- `mcp-wp/batch-update` - Update multiple items
-- `mcp-wp/export-pattern` - Export pattern as JSON
-- `mcp-wp/import-pattern` - Import pattern from JSON
-- `mcp-wp/get-pattern-usage` - Find pattern usage
-- `mcp-wp/clone-item` - Duplicate page/post
+### menus
+- `mcp-wp/list-menus`
+- `mcp-wp/get-menu`
+- `mcp-wp/create-menu`
+- `mcp-wp/edit-menu`
+- `mcp-wp/delete-menu`
+- `mcp-wp/list-menu-locations`
+- `mcp-wp/assign-menu-location`
+- `mcp-wp/create-menu-item`
+- `mcp-wp/edit-menu-item`
+- `mcp-wp/delete-menu-item`
+
+### fse
+- `mcp-wp/list-block-entities`
+- `mcp-wp/get-block-entity`
+- `mcp-wp/create-block-entity`
+- `mcp-wp/edit-block-entity`
+- `mcp-wp/delete-block-entity`
+
+### patterns
+- `mcp-wp/list-patterns`
+- `mcp-wp/get-pattern`
+- `mcp-wp/create-pattern`
+- `mcp-wp/edit-pattern`
+- `mcp-wp/delete-pattern`
+- `mcp-wp/get-block-types`
+- `mcp-wp/validate-blocks`
+
+### media
+- `mcp-wp/upload-media`
+- `mcp-wp/list-media`
+- `mcp-wp/get-media`
+- `mcp-wp/edit-media`
+- `mcp-wp/replace-media-file`
+- `mcp-wp/delete-media`
+
+### users
+- `mcp-wp/list-users`
+- `mcp-wp/get-user`
+- `mcp-wp/get-current-user`
+- `mcp-wp/create-user`
+- `mcp-wp/edit-user`
+
+### taxonomy
+- `mcp-wp/list-categories`
+- `mcp-wp/list-tags`
+- `mcp-wp/create-category`
+- `mcp-wp/create-tag`
+- `mcp-wp/edit-term`
+- `mcp-wp/delete-term`
+
+### settings
+- `mcp-wp/get-settings`
+- `mcp-wp/get-gutenberg-settings`
+- `mcp-wp/get-site-stats`
+- `mcp-wp/update-settings`
+
+### plugins
+- `mcp-wp/list-plugins`
+- `mcp-wp/get-plugin`
+- `mcp-wp/activate-plugin`
+- `mcp-wp/deactivate-plugin`
+- `mcp-wp/install-plugin`
+- `mcp-wp/update-plugin`
+- `mcp-wp/delete-plugin`
+- `mcp-wp/get-theme`
+- `mcp-wp/get-theme-supports`
+- `mcp-wp/list-themes`
+- `mcp-wp/switch-theme`
+- `mcp-wp/install-theme`
+- `mcp-wp/update-theme`
+- `mcp-wp/delete-theme`
+
+### advanced
+- `mcp-wp/custom-rest-call`
+- `mcp-wp/query-posts-advanced`
+- `mcp-wp/batch-update`
+- `mcp-wp/export-pattern`
+- `mcp-wp/import-pattern`
+- `mcp-wp/get-pattern-usage`
+- `mcp-wp/clone-item`
 
 ## Installation
 
 ### Prerequisites
-1. WordPress 6.9+ (includes Abilities API)
-2. MCP Adapter plugin (download from [GitHub releases](https://github.com/WordPress/mcp-adapter/releases))
+- WordPress 6.9+ (Abilities API)
+- MCP Adapter plugin active
+- Application Password for the WordPress user that will authenticate MCP
 
 ### Steps
-1. Install and activate the MCP Adapter plugin
-2. Place this plugin folder in `wp-content/plugins/`
-3. Activate through WordPress admin
-4. Create an Application Password for API authentication (Users > Edit User > Application Passwords)
+1. Install and activate `mcp-adapter`.
+2. Copy this plugin to `wp-content/plugins/wordpress-wae`.
+3. Activate this plugin.
+4. Use endpoint:
+   - `https://<site>/wp-json/mcp/mcp-adapter-default-server`
 
-### MCP Client Configuration
-
-Configure your MCP client (VS Code, Claude Desktop, etc.) with:
+## MCP Client Example
 
 ```json
 {
@@ -101,7 +169,7 @@ Configure your MCP client (VS Code, Claude Desktop, etc.) with:
       "command": "npx",
       "args": ["-y", "@automattic/mcp-wordpress-remote@latest"],
       "env": {
-        "WP_API_URL": "https://your-site.com/wp-json/mcp/mcp-adapter-default-server",
+        "WP_API_URL": "https://your-site/wp-json/mcp/mcp-adapter-default-server",
         "WP_API_USERNAME": "your-username",
         "WP_API_PASSWORD": "your-application-password"
       }
@@ -110,17 +178,15 @@ Configure your MCP client (VS Code, Claude Desktop, etc.) with:
 }
 ```
 
-**Important**: Use HTTPS for the URL if your WordPress site uses SSL.
+## MCP Call Pattern
 
-## Usage via MCP
+MCP Adapter exposes 3 tools:
+- `mcp-adapter-discover-abilities`
+- `mcp-adapter-get-ability-info`
+- `mcp-adapter-execute-ability`
 
-All abilities are automatically exposed via MCP with:
-- Full input/output schema definitions
-- Proper permission checks
-- Comprehensive error handling
-- Structured response format
+Execution example:
 
-Example MCP call:
 ```json
 {
   "jsonrpc": "2.0",
@@ -129,111 +195,55 @@ Example MCP call:
   "params": {
     "name": "mcp-adapter-execute-ability",
     "arguments": {
-      "ability_name": "mcp-wp/create-page",
+      "ability_name": "mcp-wp/create-content",
       "parameters": {
-        "title": "My Page",
-        "content": "Page content",
-        "status": "publish"
+        "post_type": "page",
+        "title": "Hello",
+        "content": "Created over MCP",
+        "status": "draft"
       }
     }
   }
 }
 ```
 
-## File Structure
+## Live Verification (2026-03-20)
 
-```
-mcp-wp-capabilities/
-├── mcp-wp-capabilities.php      # Main plugin file
-├── data/
-│   ├── abilities.php            # Abilities 1-10 (Page/Post management)
-│   ├── abilities-11-45.php      # Abilities 11-45 (Remaining groups)
-│   └── class-ability-helpers.php # Helper class for common operations
-├── README.md                    # This file
-└── .git                         # Version control
-```
+Verified against:
+- `https://testar-ai-funktioner-c4781b3.site.mild-wp.com/wp-json/mcp/mcp-adapter-default-server`
 
-## Architecture
+Authenticated with Application Password and ran full HTTP smoke tests.
 
-### Plugin Entry Point (mcp-wp-capabilities.php)
-- Registers ability category
-- Hooks into WordPress Abilities API
-- Loads ability definitions
+Result:
+- **32/32 checks passed**
 
-### Ability Groups (data/abilities.php & data/abilities-11-45.php)
-- 45 wp_register_ability() calls
-- Organized in 8 logical groups
-- Each ability includes input/output schemas
-- Proper permission and validation callbacks
+Coverage in smoke:
+- Ability exposure checks
+- Generic content CRUD
+- Comment CRUD
+- Taxonomy create/edit/delete
+- Media upload/edit/replace/delete
+- FSE entity CRUD
+- Settings update
+- Plugin/theme lifecycle operations and guard checks
 
-### Helper Class (data/class-ability-helpers.php)
-- Common utilities for all abilities
-- User capability checking
-- Post/Page object retrieval
-- Response formatting
-- Block validation
-- Pattern management helpers
+## Security Notes
 
-## Security Considerations
+- Every ability uses capability checks.
+- Inputs are validated with input schemas and sanitized in handlers.
+- Keep MCP auth credentials scoped and site-specific.
+- For destructive workflows, keep confirmation gates in your AI orchestration layer.
 
-- All inputs are sanitized (sanitize_text_field, wp_kses_post, etc.)
-- User capabilities are checked for each operation
-- Only authenticated users can use abilities
-- Proper WordPress escaping applied
-- Meta field keys are sanitized
-- Taxonomy inputs validated
+## Operational Notes
 
-## Testing
+- Plugin/theme install or update requires outbound access to WordPress.org and usable filesystem credentials.
+- Active theme/plugin guardrails are enforced by WordPress core behavior and ability logic.
 
-The plugin includes diagnostic and test scripts:
+## Development Utilities
 
-### Quick Diagnostic
-```bash
-bash diagnose.sh
-```
-Checks WordPress connectivity, REST API, MCP namespace, and ability discovery.
-
-### Full Test Suite
-```bash
-bash tests.sh
-```
-Tests all 45 abilities via MCP protocol.
-
-### Manual Testing via MCP
-1. Initialize session and get tools list
-2. Call tools using the MCP protocol
-3. Tool names use underscores: `mcp-wp-create-page` (not `mcp-wp/create-page`)
-
-Example creating a page:
-```bash
-# Get session
-SESSION=$(curl -k -s -i -X POST "https://your-site.com/wp-json/mcp/mcp-adapter-default-server" \
-  -u "username:password" \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' \
-  | grep -i 'mcp-session-id' | cut -d' ' -f2 | tr -d '\r')
-
-# Create page
-curl -k -s -X POST "https://your-site.com/wp-json/mcp/mcp-adapter-default-server" \
-  -u "username:password" \
-  -H 'Content-Type: application/json' \
-  -H "Mcp-Session-Id: $SESSION" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"mcp-wp-create-page","arguments":{"title":"My Page","content":"Page content","status":"publish"}}}'
-```
-
-## Version
-
-Version: 1.0.0
+- `bash diagnose.sh` for endpoint and registration diagnostics
+- `bash tests.sh` for local scripted checks
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Contributing
-
-Improvements and additional abilities welcome. Ensure:
-- All abilities follow existing patterns
-- Input/output schemas are complete
-- Proper capability checks are in place
-- Input validation is comprehensive
-- Code follows WordPress coding standards
+MIT (see `LICENSE`).

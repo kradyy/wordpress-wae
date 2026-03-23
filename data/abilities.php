@@ -25,6 +25,10 @@ function mcp_wp_capabilities_register_all_abilities() {
 	// Define all ability categories and their files
 	$ability_categories = array(
 		'posts'     => 'posts/abilities.php',
+		'comments'  => 'comments/abilities.php',
+		'cpt'       => 'cpt/abilities.php',
+		'menus'     => 'menus/abilities.php',
+		'fse'       => 'fse/abilities.php',
 		'patterns'  => 'patterns/abilities.php',
 		'media'     => 'media/abilities.php',
 		'users'     => 'users/abilities.php',

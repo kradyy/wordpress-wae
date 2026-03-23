@@ -122,40 +122,59 @@ function mcp_wp_capabilities_register_abilities() {
 	mcp_wp_capabilities_register_all_abilities();
 }
 
+/**
+ * Discover all public mcp-wp/* abilities exposed as MCP tools.
+ *
+ * @return array<int,string>
+ */
+function mcp_wp_capabilities_discover_public_tool_abilities(): array {
+	if ( ! function_exists( 'wp_get_abilities' ) ) {
+		return array();
+	}
+
+	$abilities = wp_get_abilities();
+	$tools     = array();
+
+	foreach ( $abilities as $ability ) {
+		if ( ! is_object( $ability ) || ! method_exists( $ability, 'get_name' ) || ! method_exists( $ability, 'get_meta' ) ) {
+			continue;
+		}
+
+		$ability_name = (string) $ability->get_name();
+		if ( 0 !== strpos( $ability_name, 'mcp-wp/' ) ) {
+			continue;
+		}
+
+		$meta = $ability->get_meta();
+		if ( ! is_array( $meta ) ) {
+			continue;
+		}
+
+		$is_public    = ! empty( $meta['mcp']['public'] );
+		$ability_type = isset( $meta['mcp']['type'] ) ? (string) $meta['mcp']['type'] : 'tool';
+
+		if ( ! $is_public || 'tool' !== $ability_type ) {
+			continue;
+		}
+
+		$tools[] = $ability_name;
+	}
+
+	$tools = array_values( array_unique( $tools ) );
+	sort( $tools, SORT_STRING );
+	return $tools;
+}
+
 // Register the MCP server
 // Using the action hook mcp_adapter_init ensures we don't create the server too soon
 add_action(
 	'mcp_adapter_init',
 	function ( $adapter ) {
-		// Get all registered abilities with mcp-wp prefix
-		$all_abilities = array();
-		
-		// Manually list all abilities we want to expose
-		$abilities_to_expose = array(
-			'mcp-wp/test',
-			'mcp-wp/create-page',
-			'mcp-wp/edit-page',
-			'mcp-wp/get-page',
-			'mcp-wp/list-pages',
-			'mcp-wp/delete-page',
-			'mcp-wp/create-post',
-			'mcp-wp/edit-post',
-			'mcp-wp/get-post',
-			'mcp-wp/list-posts',
-			'mcp-wp/delete-post',
-		);
-		
-		// Filter to only include abilities that are actually registered
-		foreach ( $abilities_to_expose as $ability_id ) {
-			$ability = wp_get_ability( $ability_id );
-			if ( $ability ) {
-				$all_abilities[] = $ability_id;
-			}
-		}
-		
+		$all_abilities = mcp_wp_capabilities_discover_public_tool_abilities();
+
 		error_log( 'MCP Server: Registering with ' . count( $all_abilities ) . ' abilities' );
-		error_log( 'MCP Server: Abilities = ' . print_r( $all_abilities, true ) );
-		
+		error_log( 'MCP Server: Abilities = ' . wp_json_encode( $all_abilities ) );
+
 		$adapter->create_server(
 			'mcp-wp-capabilities-server',                    // Unique server identifier
 			'mcp',                                           // REST API namespace
