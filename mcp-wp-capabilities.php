@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: MCP WordPress Capabilities
- * Plugin URI: https://github.com/your-org/mcp-wp-capabilities
+ * Plugin URI: https://github.com/kradyy/wordpress-wae
  * Description: Comprehensive WordPress capabilities for MCP (Model Context Protocol) integration
  * Version: 1.0.0
  * Author: Chris
- * Author URI: https://mild.se
+ * Author URI: https://github.com/kradyy
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0-or-later.html
  * Text Domain: mcp-wp-capabilities
