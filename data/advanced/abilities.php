@@ -85,7 +85,160 @@ function mcp_wp_register_custom_rest_call() {
 }
 
 /**
- * 40. Query Posts Advanced
+ * Resolve an internal frontend URL safely for rendered HTML fetches.
+ *
+ * @param array $input Ability input.
+ * @return array|string WP_Error-like array on failure, URL string on success.
+ */
+function mcp_wp_resolve_internal_frontend_url( array $input ) {
+	$home_url  = home_url( '/' );
+	$home_host = wp_parse_url( $home_url, PHP_URL_HOST );
+	$page_id   = isset( $input['page_id'] ) ? absint( $input['page_id'] ) : 0;
+	$url_input = isset( $input['url'] ) ? trim( (string) $input['url'] ) : '';
+
+	if ( ! $page_id && '' === $url_input ) {
+		return array(
+			'success' => false,
+			'error'   => 'Either page_id or url is required',
+		);
+	}
+
+	if ( $page_id ) {
+		$page = get_post( $page_id );
+		if ( ! $page ) {
+			return array(
+				'success' => false,
+				'error'   => 'Page not found',
+			);
+		}
+
+		return get_permalink( $page_id );
+	}
+
+	$target_url = $url_input;
+	if ( 0 === strpos( $target_url, '/' ) ) {
+		$target_url = home_url( $target_url );
+	} elseif ( false === strpos( $target_url, '://' ) ) {
+		$target_url = home_url( '/' . ltrim( $target_url, '/' ) );
+	}
+
+	$target_host = wp_parse_url( $target_url, PHP_URL_HOST );
+	if ( ! $target_host || ! $home_host || strtolower( (string) $target_host ) !== strtolower( (string) $home_host ) ) {
+		return array(
+			'success' => false,
+			'error'   => 'Only internal site URLs are allowed',
+		);
+	}
+
+	return esc_url_raw( $target_url );
+}
+
+/**
+ * 40. Get Rendered Page HTML
+ */
+function mcp_wp_register_get_rendered_page_html() {
+	wp_register_ability(
+		'mcp-wp/get-rendered-page-html',
+		array(
+			'label'               => __( 'Get Rendered Page HTML', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Fetch rendered frontend HTML for an internal page URL', 'mcp-wp-capabilities' ),
+			'category'            => 'mcp-wp',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'page_id' => array( 'type' => 'integer', 'description' => 'Optional page ID to fetch via permalink' ),
+					'url'     => array( 'type' => 'string', 'description' => 'Optional internal URL or relative path' ),
+					'max_length' => array( 'type' => 'integer', 'description' => 'Max HTML chars to return (1000-200000, default 50000)' ),
+					'contains' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Optional substrings to test for existence' ),
+				),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'       => array( 'type' => 'boolean' ),
+					'url'           => array( 'type' => 'string' ),
+					'status'        => array( 'type' => 'integer' ),
+					'html'          => array( 'type' => 'string' ),
+					'length'        => array( 'type' => 'integer' ),
+					'truncated'     => array( 'type' => 'boolean' ),
+					'contains'      => array( 'type' => 'object' ),
+					'error'         => array( 'type' => 'string' ),
+				),
+			),
+			'permission_callback' => static function () {
+				return MCP_WP_Ability_Helpers::check_user_capability( 'read' );
+			},
+			'execute_callback'    => static function ( array $input ) {
+				$resolved = mcp_wp_resolve_internal_frontend_url( $input );
+				if ( is_array( $resolved ) && isset( $resolved['success'] ) && false === $resolved['success'] ) {
+					return $resolved;
+				}
+
+				$target_url = (string) $resolved;
+				$max_length = isset( $input['max_length'] ) ? absint( $input['max_length'] ) : 50000;
+				$max_length = max( 1000, min( 200000, $max_length ) );
+
+				$response = wp_remote_get(
+					$target_url,
+					array(
+						'timeout'     => 20,
+						'redirection' => 5,
+						'headers'     => array(
+							'Accept'     => 'text/html,application/xhtml+xml',
+							'User-Agent' => 'mcp-wp-rendered-html/1.0',
+						),
+					)
+				);
+
+				if ( is_wp_error( $response ) ) {
+					return array(
+						'success' => false,
+						'error'   => $response->get_error_message(),
+					);
+				}
+
+				$status = (int) wp_remote_retrieve_response_code( $response );
+				$html   = (string) wp_remote_retrieve_body( $response );
+				$length = strlen( $html );
+
+				$truncated = false;
+				if ( $length > $max_length ) {
+					$html      = substr( $html, 0, $max_length );
+					$truncated = true;
+				}
+
+				$contains = array();
+				$contains_input = isset( $input['contains'] ) && is_array( $input['contains'] ) ? $input['contains'] : array();
+				foreach ( $contains_input as $needle_raw ) {
+					$needle = trim( (string) $needle_raw );
+					if ( '' === $needle ) {
+						continue;
+					}
+					$contains[ $needle ] = false !== strpos( $html, $needle );
+				}
+
+				return array(
+					'success'   => true,
+					'url'       => $target_url,
+					'status'    => $status,
+					'html'      => $html,
+					'length'    => $length,
+					'truncated' => $truncated,
+					'contains'  => $contains,
+				);
+			},
+			'meta'                => array(
+				'mcp' => array(
+					'public' => true,
+					'type'   => 'tool',
+				),
+			),
+		)
+	);
+}
+
+/**
+ * 41. Query Posts Advanced
  */
 function mcp_wp_register_query_posts_advanced() {
 	wp_register_ability(
@@ -189,7 +342,7 @@ function mcp_wp_register_query_posts_advanced() {
 }
 
 /**
- * 41. Batch Update
+ * 42. Batch Update
  */
 function mcp_wp_register_batch_update() {
 	wp_register_ability(
@@ -272,7 +425,7 @@ function mcp_wp_register_batch_update() {
 }
 
 /**
- * 42. Export Pattern
+ * 43. Export Pattern
  */
 function mcp_wp_register_export_pattern() {
 	wp_register_ability(
@@ -326,7 +479,7 @@ function mcp_wp_register_export_pattern() {
 }
 
 /**
- * 43. Import Pattern
+ * 44. Import Pattern
  */
 function mcp_wp_register_import_pattern() {
 	wp_register_ability(
@@ -404,7 +557,7 @@ function mcp_wp_register_import_pattern() {
 }
 
 /**
- * 44. Get Pattern Usage
+ * 45. Get Pattern Usage
  */
 function mcp_wp_register_get_pattern_usage() {
 	wp_register_ability(
@@ -473,7 +626,7 @@ function mcp_wp_register_get_pattern_usage() {
 }
 
 /**
- * 45. Clone Item
+ * 46. Clone Item
  */
 function mcp_wp_register_clone_item() {
 	wp_register_ability(
@@ -575,6 +728,7 @@ function mcp_wp_register_clone_item() {
  */
 function mcp_wp_register_advanced_abilities() {
 	mcp_wp_register_custom_rest_call();
+	mcp_wp_register_get_rendered_page_html();
 	mcp_wp_register_query_posts_advanced();
 	mcp_wp_register_batch_update();
 	mcp_wp_register_export_pattern();
