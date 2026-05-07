@@ -48,35 +48,38 @@ class MCP_WP_Ability_Helpers {
 	}
 
 	/**
-	 * Get page by ID
+	 * Get content by ID
 	 *
-	 * @param int $page_id Page ID.
+	 * @param int $content_id Content ID.
 	 * @return \WP_Post|null Post object or null if not found.
 	 */
-	public static function get_page_object( int $page_id ) {
-		$page = get_post( $page_id );
-
-		if ( ! $page || 'page' !== $page->post_type ) {
-			return null;
-		}
-
-		return $page;
-	}
-
-	/**
-	 * Get post by ID
-	 *
-	 * @param int $post_id Post ID.
-	 * @return \WP_Post|null Post object or null if not found.
-	 */
-	public static function get_post_object( int $post_id ) {
-		$post = get_post( $post_id );
-
-		if ( ! $post || 'post' !== $post->post_type ) {
+	public static function get_content_object( int $content_id ) {
+		$post = get_post( $content_id );
+		if ( ! $post instanceof \WP_Post ) {
 			return null;
 		}
 
 		return $post;
+	}
+
+	/**
+	 * Get page by ID (legacy alias, accepts all post types)
+	 *
+	 * @param int $page_id Page/content ID.
+	 * @return \WP_Post|null Post object or null if not found.
+	 */
+	public static function get_page_object( int $page_id ) {
+		return self::get_content_object( $page_id );
+	}
+
+	/**
+	 * Get post by ID (legacy alias, accepts all post types)
+	 *
+	 * @param int $post_id Post/content ID.
+	 * @return \WP_Post|null Post object or null if not found.
+	 */
+	public static function get_post_object( int $post_id ) {
+		return self::get_content_object( $post_id );
 	}
 
 	/**

@@ -15,6 +15,45 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Resolve post type for posts/page abilities with legacy defaults.
+ *
+ * @param array<string,mixed> $input Ability input.
+ * @param string              $default_post_type Default post type when none is provided.
+ * @return string|\WP_Error
+ */
+function mcp_wp_posts_resolve_post_type( array $input, string $default_post_type ) {
+	$post_type = isset( $input['post_type'] ) ? sanitize_key( (string) $input['post_type'] ) : $default_post_type;
+	if ( '' === $post_type ) {
+		$post_type = $default_post_type;
+	}
+
+	if ( ! post_type_exists( $post_type ) ) {
+		return new \WP_Error( 'invalid_post_type', sprintf( 'Post type "%s" does not exist.', $post_type ) );
+	}
+
+	return $post_type;
+}
+
+/**
+ * Check create capability for a specific post type.
+ *
+ * @param string $post_type Post type key.
+ * @return bool|\WP_Error
+ */
+function mcp_wp_posts_check_create_capability( string $post_type ) {
+	$post_type_object = get_post_type_object( $post_type );
+	if ( ! $post_type_object || ! isset( $post_type_object->cap ) ) {
+		return new \WP_Error( 'post_type_capability_missing', 'Could not resolve post type capabilities.' );
+	}
+
+	$capability = isset( $post_type_object->cap->create_posts )
+		? (string) $post_type_object->cap->create_posts
+		: ( isset( $post_type_object->cap->edit_posts ) ? (string) $post_type_object->cap->edit_posts : 'edit_posts' );
+
+	return MCP_WP_Ability_Helpers::check_user_capability( $capability );
+}
+
+/**
  * 1. Create Page
  */
 function mcp_wp_register_create_page() {
@@ -27,6 +66,7 @@ function mcp_wp_register_create_page() {
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
+					'post_type'      => array( 'type' => 'string', 'description' => 'Post type key (default: page)' ),
 					'title'          => array( 'type' => 'string', 'description' => 'Page title' ),
 					'content'        => array( 'type' => 'string', 'description' => 'Page content (HTML or blocks)' ),
 					'status'         => array( 'type' => 'string', 'enum' => array( 'draft', 'publish', 'private' ), 'description' => 'Page status' ),
@@ -47,15 +87,28 @@ function mcp_wp_register_create_page() {
 					'error'   => array( 'type' => 'string' ),
 				),
 			),
-			'permission_callback' => static function () {
-				return MCP_WP_Ability_Helpers::check_user_capability( 'edit_pages' );
+			'permission_callback' => static function ( $input = array() ) {
+				$payload   = is_array( $input ) ? $input : array();
+				$post_type = mcp_wp_posts_resolve_post_type( $payload, 'page' );
+				if ( is_wp_error( $post_type ) ) {
+					return $post_type;
+				}
+				return mcp_wp_posts_check_create_capability( $post_type );
 			},
 			'execute_callback'    => static function ( array $input ) {
+				$post_type = mcp_wp_posts_resolve_post_type( $input, 'page' );
+				if ( is_wp_error( $post_type ) ) {
+					return array(
+						'success' => false,
+						'error'   => $post_type->get_error_message(),
+					);
+				}
+
 				$page_data = array(
 					'post_title'   => sanitize_text_field( $input['title'] ),
 					'post_content' => wp_kses_post( $input['content'] ),
 					'post_status'  => isset( $input['status'] ) ? sanitize_text_field( $input['status'] ) : 'draft',
-					'post_type'    => 'page',
+					'post_type'    => $post_type,
 				);
 
 				if ( isset( $input['slug'] ) ) {
@@ -133,8 +186,17 @@ function mcp_wp_register_edit_page() {
 					'error'   => array( 'type' => 'string' ),
 				),
 			),
-			'permission_callback' => static function () {
-				return MCP_WP_Ability_Helpers::check_user_capability( 'edit_pages' );
+			'permission_callback' => static function ( $input = array() ) {
+				$payload = is_array( $input ) ? $input : array();
+				$page_id = absint( $payload['page_id'] ?? 0 );
+				if ( $page_id > 0 ) {
+					if ( current_user_can( 'edit_post', $page_id ) ) {
+						return true;
+					}
+					return new \WP_Error( 'insufficient_capability', 'Current user cannot edit this content.' );
+				}
+
+				return MCP_WP_Ability_Helpers::check_user_capability( 'edit_posts' );
 			},
 			'execute_callback'    => static function ( array $input ) {
 				$page_id = absint( $input['page_id'] );
@@ -143,7 +205,7 @@ function mcp_wp_register_edit_page() {
 				if ( ! $page ) {
 					return array(
 						'success' => false,
-						'error'   => 'Page not found',
+						'error'   => 'Content not found',
 					);
 				}
 
@@ -234,7 +296,7 @@ function mcp_wp_register_get_page() {
 				if ( ! $page ) {
 					return array(
 						'success' => false,
-						'error'   => 'Page not found',
+						'error'   => 'Content not found',
 					);
 				}
 
@@ -266,6 +328,7 @@ function mcp_wp_register_list_pages() {
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
+					'post_type'  => array( 'type' => 'string', 'description' => 'Post type key (default: page)' ),
 					'status'    => array( 'type' => 'string', 'enum' => array( 'publish', 'draft', 'private', 'any' ) ),
 					'parent_id' => array( 'type' => 'integer', 'description' => 'Filter by parent page' ),
 					'search'    => array( 'type' => 'string', 'description' => 'Search term' ),
@@ -288,9 +351,16 @@ function mcp_wp_register_list_pages() {
 			'execute_callback'    => static function ( array $input ) {
 				$per_page = min( absint( $input['per_page'] ?? 10 ), 100 );
 				$paged    = absint( $input['page'] ?? 1 );
+				$post_type = mcp_wp_posts_resolve_post_type( $input, 'page' );
+				if ( is_wp_error( $post_type ) ) {
+					return array(
+						'success' => false,
+						'error'   => $post_type->get_error_message(),
+					);
+				}
 
 				$args = array(
-					'post_type'      => 'page',
+					'post_type'      => $post_type,
 					'posts_per_page' => $per_page,
 					'paged'          => $paged,
 					'orderby'        => 'title',
@@ -359,8 +429,17 @@ function mcp_wp_register_delete_page() {
 					'error'    => array( 'type' => 'string' ),
 				),
 			),
-			'permission_callback' => static function () {
-				return MCP_WP_Ability_Helpers::check_user_capability( 'delete_pages' );
+			'permission_callback' => static function ( $input = array() ) {
+				$payload = is_array( $input ) ? $input : array();
+				$page_id = absint( $payload['page_id'] ?? 0 );
+				if ( $page_id > 0 ) {
+					if ( current_user_can( 'delete_post', $page_id ) ) {
+						return true;
+					}
+					return new \WP_Error( 'insufficient_capability', 'Current user cannot delete this content.' );
+				}
+
+				return MCP_WP_Ability_Helpers::check_user_capability( 'delete_posts' );
 			},
 			'execute_callback'    => static function ( array $input ) {
 				$page_id = absint( $input['page_id'] );
@@ -369,7 +448,7 @@ function mcp_wp_register_delete_page() {
 				if ( ! $page ) {
 					return array(
 						'success' => false,
-						'error'   => 'Page not found',
+						'error'   => 'Content not found',
 					);
 				}
 
@@ -411,6 +490,7 @@ function mcp_wp_register_create_post() {
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
+					'post_type'      => array( 'type' => 'string', 'description' => 'Post type key (default: post)' ),
 					'title'          => array( 'type' => 'string', 'description' => 'Post title' ),
 					'content'        => array( 'type' => 'string', 'description' => 'Post content (HTML or blocks)' ),
 					'status'         => array( 'type' => 'string', 'enum' => array( 'draft', 'publish', 'private' ), 'description' => 'Post status' ),
@@ -432,15 +512,28 @@ function mcp_wp_register_create_post() {
 					'error'   => array( 'type' => 'string' ),
 				),
 			),
-			'permission_callback' => static function () {
-				return MCP_WP_Ability_Helpers::check_user_capability( 'edit_posts' );
+			'permission_callback' => static function ( $input = array() ) {
+				$payload   = is_array( $input ) ? $input : array();
+				$post_type = mcp_wp_posts_resolve_post_type( $payload, 'post' );
+				if ( is_wp_error( $post_type ) ) {
+					return $post_type;
+				}
+				return mcp_wp_posts_check_create_capability( $post_type );
 			},
 			'execute_callback'    => static function ( array $input ) {
+				$post_type = mcp_wp_posts_resolve_post_type( $input, 'post' );
+				if ( is_wp_error( $post_type ) ) {
+					return array(
+						'success' => false,
+						'error'   => $post_type->get_error_message(),
+					);
+				}
+
 				$post_data = array(
 					'post_title'   => sanitize_text_field( $input['title'] ),
 					'post_content' => wp_kses_post( $input['content'] ),
 					'post_status'  => isset( $input['status'] ) ? sanitize_text_field( $input['status'] ) : 'draft',
-					'post_type'    => 'post',
+					'post_type'    => $post_type,
 				);
 
 				if ( isset( $input['slug'] ) ) {
@@ -524,7 +617,16 @@ function mcp_wp_register_edit_post() {
 					'error'   => array( 'type' => 'string' ),
 				),
 			),
-			'permission_callback' => static function () {
+			'permission_callback' => static function ( $input = array() ) {
+				$payload = is_array( $input ) ? $input : array();
+				$post_id = absint( $payload['post_id'] ?? 0 );
+				if ( $post_id > 0 ) {
+					if ( current_user_can( 'edit_post', $post_id ) ) {
+						return true;
+					}
+					return new \WP_Error( 'insufficient_capability', 'Current user cannot edit this content.' );
+				}
+
 				return MCP_WP_Ability_Helpers::check_user_capability( 'edit_posts' );
 			},
 			'execute_callback'    => static function ( array $input ) {
@@ -534,7 +636,7 @@ function mcp_wp_register_edit_post() {
 				if ( ! $post ) {
 					return array(
 						'success' => false,
-						'error'   => 'Post not found',
+						'error'   => 'Content not found',
 					);
 				}
 
@@ -633,7 +735,7 @@ function mcp_wp_register_get_post() {
 				if ( ! $post ) {
 					return array(
 						'success' => false,
-						'error'   => 'Post not found',
+						'error'   => 'Content not found',
 					);
 				}
 
@@ -665,6 +767,7 @@ function mcp_wp_register_list_posts() {
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
+					'post_type'  => array( 'type' => 'string', 'description' => 'Post type key (default: post)' ),
 					'status'     => array( 'type' => 'string', 'enum' => array( 'publish', 'draft', 'private', 'any' ) ),
 					'category'   => array( 'type' => 'integer', 'description' => 'Filter by category ID' ),
 					'tag'        => array( 'type' => 'string', 'description' => 'Filter by tag slug' ),
@@ -689,9 +792,16 @@ function mcp_wp_register_list_posts() {
 			'execute_callback'    => static function ( array $input ) {
 				$per_page = min( absint( $input['per_page'] ?? 10 ), 100 );
 				$paged    = absint( $input['page'] ?? 1 );
+				$post_type = mcp_wp_posts_resolve_post_type( $input, 'post' );
+				if ( is_wp_error( $post_type ) ) {
+					return array(
+						'success' => false,
+						'error'   => $post_type->get_error_message(),
+					);
+				}
 
 				$args = array(
-					'post_type'      => 'post',
+					'post_type'      => $post_type,
 					'posts_per_page' => $per_page,
 					'paged'          => $paged,
 					'orderby'        => 'date',
@@ -768,7 +878,16 @@ function mcp_wp_register_delete_post() {
 					'error'    => array( 'type' => 'string' ),
 				),
 			),
-			'permission_callback' => static function () {
+			'permission_callback' => static function ( $input = array() ) {
+				$payload = is_array( $input ) ? $input : array();
+				$post_id = absint( $payload['post_id'] ?? 0 );
+				if ( $post_id > 0 ) {
+					if ( current_user_can( 'delete_post', $post_id ) ) {
+						return true;
+					}
+					return new \WP_Error( 'insufficient_capability', 'Current user cannot delete this content.' );
+				}
+
 				return MCP_WP_Ability_Helpers::check_user_capability( 'delete_posts' );
 			},
 			'execute_callback'    => static function ( array $input ) {
@@ -778,7 +897,7 @@ function mcp_wp_register_delete_post() {
 				if ( ! $post ) {
 					return array(
 						'success' => false,
-						'error'   => 'Post not found',
+						'error'   => 'Content not found',
 					);
 				}
 

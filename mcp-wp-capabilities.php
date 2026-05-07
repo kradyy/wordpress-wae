@@ -59,6 +59,18 @@ function mcp_wp_capabilities_init() {
 		'wp_abilities_api_init',
 		'mcp_wp_capabilities_register_abilities'
 	);
+
+	// Hotfix third-party ability schema bugs without editing vendor code.
+	add_action(
+		'wp_abilities_api_init',
+		'mcp_wp_capabilities_hotfix_execute_ability_schema',
+		999
+	);
+
+	// Fallback for contexts where the action already fired before hooks were attached.
+	if ( did_action( 'wp_abilities_api_init' ) ) {
+		mcp_wp_capabilities_hotfix_execute_ability_schema();
+	}
 }
 add_action( 'plugins_loaded', 'mcp_wp_capabilities_init' );
 
@@ -68,6 +80,12 @@ add_action(
 	static function () {
 		add_action( 'wp_abilities_api_categories_init', 'mcp_wp_capabilities_register_category' );
 		add_action( 'wp_abilities_api_init', 'mcp_wp_capabilities_register_abilities' );
+		add_action( 'wp_abilities_api_init', 'mcp_wp_capabilities_hotfix_execute_ability_schema', 999 );
+
+		// Fallback if wp_abilities_api_init already ran in this request.
+		if ( did_action( 'wp_abilities_api_init' ) ) {
+			mcp_wp_capabilities_hotfix_execute_ability_schema();
+		}
 	},
 	5  // Before MCP Adapter (which runs at 15)
 );
@@ -120,6 +138,95 @@ function mcp_wp_capabilities_register_abilities() {
 
 	// Register all abilities from the data file
 	mcp_wp_capabilities_register_all_abilities();
+}
+
+/**
+ * Hotfix the execute-ability output schema when bundled adapters miss `output_schema.properties.data.type`.
+ *
+ * Some distributions register `mcp-adapter/execute-ability` with an incomplete output schema.
+ * This produces REST validation notices and can confuse downstream MCP tool calls.
+ */
+function mcp_wp_capabilities_hotfix_execute_ability_schema(): void {
+	if ( ! function_exists( 'wp_get_ability' ) || ! function_exists( 'wp_unregister_ability' ) || ! function_exists( 'wp_register_ability' ) ) {
+		return;
+	}
+
+	$ability = wp_get_ability( 'mcp-adapter/execute-ability' );
+	if ( ! $ability ) {
+		return;
+	}
+
+	$output_schema = $ability->get_output_schema();
+	$data_schema   = array();
+
+	if (
+		is_array( $output_schema )
+		&& isset( $output_schema['properties'] )
+		&& is_array( $output_schema['properties'] )
+		&& isset( $output_schema['properties']['data'] )
+		&& is_array( $output_schema['properties']['data'] )
+	) {
+		$data_schema = $output_schema['properties']['data'];
+	}
+
+	// Already fixed upstream or by another plugin.
+	if ( isset( $data_schema['type'] ) ) {
+		return;
+	}
+
+	if ( ! class_exists( '\\WP\\MCP\\Abilities\\ExecuteAbilityAbility' ) ) {
+		return;
+	}
+
+	wp_unregister_ability( 'mcp-adapter/execute-ability' );
+
+	wp_register_ability(
+		'mcp-adapter/execute-ability',
+		array(
+			'label'               => 'Execute Ability',
+			'description'         => 'Execute a WordPress ability with the provided parameters. This is the primary execution layer that can run any registered ability.',
+			'category'            => 'mcp-adapter',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'ability_name' => array(
+						'type'        => 'string',
+						'description' => 'The full name of the ability to execute',
+					),
+					'parameters'   => array(
+						'type'        => 'object',
+						'description' => 'Parameters to pass to the ability',
+					),
+				),
+				'required'             => array( 'ability_name', 'parameters' ),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'data'    => array(
+						'type'        => array( 'object', 'array', 'string', 'number', 'integer', 'boolean', 'null' ),
+						'description' => 'The result data from the ability execution',
+					),
+					'error'   => array(
+						'type'        => 'string',
+						'description' => 'Error message if execution failed',
+					),
+				),
+				'required'   => array( 'success' ),
+			),
+			'permission_callback' => array( '\\WP\\MCP\\Abilities\\ExecuteAbilityAbility', 'check_permission' ),
+			'execute_callback'    => array( '\\WP\\MCP\\Abilities\\ExecuteAbilityAbility', 'execute' ),
+			'meta'                => array(
+				'annotations' => array(
+					'priority'      => '1.0',
+					'readOnlyHint'  => false,
+					'openWorldHint' => true,
+				),
+			),
+		)
+	);
 }
 
 /**
