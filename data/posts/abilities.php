@@ -54,6 +54,46 @@ function mcp_wp_posts_check_create_capability( string $post_type ) {
 }
 
 /**
+ * Normalize common malformed Gutenberg comment markers before sanitization.
+ *
+ * This helps recover from accidental AI typos like "<!- wp:...".
+ *
+ * @param string $content Raw incoming post content.
+ * @return string
+ */
+function mcp_wp_posts_normalize_block_markup( string $content ) {
+	$normalized = $content;
+
+	// Recover HTML-escaped Gutenberg comments emitted by some AI responses.
+	$normalized = preg_replace( '/&lt;!--\s*(\/?wp:[^&]*?)\s*--&gt;/u', '<!-- $1 -->', $normalized );
+
+	$normalized = str_replace(
+		array( '<!- wp:', '<!-  wp:', '<!- /wp:' ),
+		array( '<!-- wp:', '<!-- wp:', '<!-- /wp:' ),
+		$normalized
+	);
+
+	// Fix malformed self-closing block comment endings like "/->".
+	$normalized = preg_replace( '/<!--\s*(\/?wp:[^>]*?)\s*\/->/u', '<!-- $1 /-->', $normalized );
+	$normalized = preg_replace( '/<!--\s*(\/?wp:[^>]*?)\s*\/\s*-->/u', '<!-- $1 /-->', $normalized );
+	$normalized = preg_replace( '/<!--\s*(\/?wp:[^>]*?)\s*\/--\s*>/u', '<!-- $1 /-->', $normalized );
+	$normalized = preg_replace( '/<!--\s*(\/?wp:[^>]*?)\s*\/--&gt;/u', '<!-- $1 /-->', $normalized );
+
+	// Recover malformed AI-escaped URL query separators used inside block attrs,
+	// e.g. "...?w=600u0026amp;q=80" -> "...?w=600&q=80".
+	$normalized = str_replace(
+		array( '\\u0026amp;', 'u0026amp;', '\\u0026' ),
+		array( '&', '&', '&' ),
+		$normalized
+	);
+
+	// Recover common attribute key typo from AI output.
+	$normalized = str_replace( '"twgbTailTailwind"', '"twgbTailwind"', $normalized );
+
+	return is_string( $normalized ) ? $normalized : $content;
+}
+
+/**
  * 1. Create Page
  */
 function mcp_wp_register_create_page() {
@@ -106,7 +146,7 @@ function mcp_wp_register_create_page() {
 
 				$page_data = array(
 					'post_title'   => sanitize_text_field( $input['title'] ),
-					'post_content' => wp_kses_post( $input['content'] ),
+					'post_content' => wp_kses_post( mcp_wp_posts_normalize_block_markup( (string) $input['content'] ) ),
 					'post_status'  => isset( $input['status'] ) ? sanitize_text_field( $input['status'] ) : 'draft',
 					'post_type'    => $post_type,
 				);
@@ -216,7 +256,7 @@ function mcp_wp_register_edit_page() {
 				}
 
 				if ( isset( $input['content'] ) ) {
-					$update_data['post_content'] = wp_kses_post( $input['content'] );
+					$update_data['post_content'] = wp_kses_post( mcp_wp_posts_normalize_block_markup( (string) $input['content'] ) );
 				}
 
 				if ( isset( $input['status'] ) ) {
@@ -531,7 +571,7 @@ function mcp_wp_register_create_post() {
 
 				$post_data = array(
 					'post_title'   => sanitize_text_field( $input['title'] ),
-					'post_content' => wp_kses_post( $input['content'] ),
+					'post_content' => wp_kses_post( mcp_wp_posts_normalize_block_markup( (string) $input['content'] ) ),
 					'post_status'  => isset( $input['status'] ) ? sanitize_text_field( $input['status'] ) : 'draft',
 					'post_type'    => $post_type,
 				);
@@ -647,7 +687,7 @@ function mcp_wp_register_edit_post() {
 				}
 
 				if ( isset( $input['content'] ) ) {
-					$update_data['post_content'] = wp_kses_post( $input['content'] );
+					$update_data['post_content'] = wp_kses_post( mcp_wp_posts_normalize_block_markup( (string) $input['content'] ) );
 				}
 
 				if ( isset( $input['status'] ) ) {

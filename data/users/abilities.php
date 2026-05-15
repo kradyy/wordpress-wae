@@ -231,7 +231,7 @@ function mcp_wp_register_create_user() {
 				$user_data = array(
 					'user_login'   => sanitize_user( $input['username'] ),
 					'user_email'   => sanitize_email( $input['email'] ),
-					'user_pass'    => sanitize_text_field( $input['password'] ),
+					'user_pass'    => $input['password'],
 					'first_name'   => isset( $input['first_name'] ) ? sanitize_text_field( $input['first_name'] ) : '',
 					'last_name'    => isset( $input['last_name'] ) ? sanitize_text_field( $input['last_name'] ) : '',
 					'display_name' => isset( $input['display_name'] ) ? sanitize_text_field( $input['display_name'] ) : '',
@@ -333,7 +333,7 @@ function mcp_wp_register_edit_user() {
 				}
 
 				if ( isset( $input['password'] ) ) {
-					$user_data['user_pass'] = sanitize_text_field( $input['password'] );
+					$user_data['user_pass'] = $input['password'];
 				}
 
 				$result = wp_update_user( $user_data );

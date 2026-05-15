@@ -188,7 +188,7 @@ function mcp_wp_register_list_media() {
 							'id'       => $post->ID,
 							'title'    => $post->post_title,
 							'filename' => basename( $post->guid ),
-							'url'      => $post->guid,
+							'url'      => wp_get_attachment_url( $post->ID ),
 							'type'     => $post->post_mime_type,
 							'date'     => $post->post_date_gmt,
 						);
@@ -259,7 +259,7 @@ function mcp_wp_register_get_media() {
 						'id'       => $attachment->ID,
 						'title'    => $attachment->post_title,
 						'filename' => basename( $attachment->guid ),
-						'url'      => $attachment->guid,
+						'url'      => wp_get_attachment_url( $attachment->ID ),
 						'type'     => $attachment->post_mime_type,
 						'date'     => $attachment->post_date_gmt,
 						'width'    => $metadata['width'] ?? null,
@@ -531,7 +531,7 @@ function mcp_wp_register_delete_media() {
 				'type'       => 'object',
 				'properties' => array(
 					'attachment_id' => array( 'type' => 'integer', 'description' => 'Attachment ID' ),
-					'force'         => array( 'type' => 'boolean', 'description' => 'Permanently delete (default true)' ),
+					'force'         => array( 'type' => 'boolean', 'description' => 'Permanently delete (default false; attachment is trashed otherwise)' ),
 				),
 				'required'   => array( 'attachment_id' ),
 			),
@@ -548,7 +548,7 @@ function mcp_wp_register_delete_media() {
 			},
 			'execute_callback'    => static function ( array $input ) {
 				$attachment_id = absint( $input['attachment_id'] ?? 0 );
-				$force         = ! array_key_exists( 'force', $input ) || ! empty( $input['force'] );
+				$force         = array_key_exists( 'force', $input ) ? (bool) $input['force'] : false;
 				$attachment    = get_post( $attachment_id );
 
 				if ( ! $attachment || 'attachment' !== $attachment->post_type ) {

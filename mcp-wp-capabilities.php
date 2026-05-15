@@ -91,6 +91,211 @@ add_action(
 );
 
 /**
+ * Normalize an MCP pattern name to the persisted wp_block post slug.
+ *
+ * @param string $name Pattern name/slug supplied by the ability caller.
+ * @return string
+ */
+function mcp_wp_capabilities_normalize_pattern_post_slug( string $name ): string {
+	$slug = sanitize_title( str_replace( '/', '-', $name ) );
+	return '' !== $slug ? $slug : sanitize_key( $name );
+}
+
+/**
+ * Build the registry names that should resolve a persisted MCP pattern.
+ *
+ * @param WP_Post $post Pattern post.
+ * @return array<int,string>
+ */
+function mcp_wp_capabilities_get_pattern_registry_names( WP_Post $post ): array {
+	$names       = array();
+	$stored_name = (string) get_post_meta( $post->ID, '_mcp_wp_pattern_name', true );
+	$post_slug   = (string) $post->post_name;
+
+	if ( '' !== $stored_name ) {
+		$names[] = $stored_name;
+	}
+	if ( '' !== $post_slug ) {
+		$names[] = $post_slug;
+		$names[] = 'mild-mcp-patterns/' . $post_slug;
+	}
+
+	return array_values( array_unique( array_filter( $names ) ) );
+}
+
+/**
+ * Build a stable API response for a persisted pattern post.
+ *
+ * @param WP_Post $post Pattern post.
+ * @return array<string,mixed>
+ */
+function mcp_wp_capabilities_pattern_post_response( WP_Post $post ): array {
+	$slug         = (string) $post->post_name;
+	$pattern_name = 'mild-mcp-patterns/' . $slug;
+
+	return array(
+		'id'                  => (int) $post->ID,
+		'name'                => $pattern_name,
+		'raw_name'            => (string) get_post_meta( $post->ID, '_mcp_wp_pattern_name', true ),
+		'slug'                => $slug,
+		'title'               => $post->post_title,
+		'content'             => $post->post_content,
+		'category'            => (string) get_post_meta( $post->ID, '_mcp_wp_pattern_category', true ),
+		'pattern_block_markup' => '<!-- wp:pattern {"slug":"' . esc_attr( $pattern_name ) . '"} /-->',
+		'synced_block_markup' => '<!-- wp:block {"ref":' . (int) $post->ID . '} /-->',
+	);
+}
+
+/**
+ * Register one persisted pattern with WordPress for this request.
+ *
+ * @param WP_Post|int $post Pattern post or post ID.
+ * @return void
+ */
+function mcp_wp_capabilities_register_pattern_post( $post ): void {
+	if ( ! function_exists( 'register_block_pattern' ) ) {
+		return;
+	}
+
+	$post = $post instanceof WP_Post ? $post : get_post( (int) $post );
+	if ( ! $post instanceof WP_Post || 'wp_block' !== $post->post_type || 'publish' !== $post->post_status ) {
+		return;
+	}
+
+	if ( function_exists( 'register_block_pattern_category' ) ) {
+		register_block_pattern_category(
+			'mcp-wp',
+			array( 'label' => __( 'MCP WordPress', 'mcp-wp-capabilities' ) )
+		);
+	}
+
+	$category = (string) get_post_meta( $post->ID, '_mcp_wp_pattern_category', true );
+	$keywords = get_post_meta( $post->ID, '_mcp_wp_pattern_keywords', true );
+	$pattern  = array(
+		'title'       => $post->post_title,
+		'content'     => $post->post_content,
+		'categories'  => array( '' !== $category ? $category : 'mcp-wp' ),
+		'description' => (string) get_post_meta( $post->ID, '_mcp_wp_pattern_description', true ),
+		'keywords'    => is_array( $keywords ) ? array_values( array_filter( array_map( 'sanitize_text_field', $keywords ) ) ) : array(),
+	);
+
+	$registry = class_exists( 'WP_Block_Patterns_Registry' )
+		? WP_Block_Patterns_Registry::get_instance()
+		: null;
+
+	foreach ( mcp_wp_capabilities_get_pattern_registry_names( $post ) as $name ) {
+		if ( $registry && method_exists( $registry, 'is_registered' ) && $registry->is_registered( $name ) ) {
+			continue;
+		}
+		register_block_pattern( $name, $pattern );
+	}
+}
+
+/**
+ * Register persisted MCP-created patterns on frontend/admin requests.
+ *
+ * @return void
+ */
+function mcp_wp_capabilities_register_persisted_patterns(): void {
+	$posts = get_posts(
+		array(
+			'post_type'      => 'wp_block',
+			'post_status'    => 'publish',
+			'posts_per_page' => -1,
+			'meta_key'       => '_mcp_wp_pattern_managed',
+			'meta_value'     => '1',
+			'no_found_rows'  => true,
+		)
+	);
+
+	foreach ( $posts as $post ) {
+		mcp_wp_capabilities_register_pattern_post( $post );
+	}
+}
+add_action( 'init', 'mcp_wp_capabilities_register_persisted_patterns', 20 );
+
+/**
+ * Find a persisted MCP pattern by supplied registry name or slug.
+ *
+ * @param string $name Pattern name.
+ * @return WP_Post|null
+ */
+function mcp_wp_capabilities_find_pattern_post( string $name ): ?WP_Post {
+	$slug = mcp_wp_capabilities_normalize_pattern_post_slug( $name );
+	$post = get_page_by_path( $slug, OBJECT, 'wp_block' );
+	if ( $post instanceof WP_Post ) {
+		return $post;
+	}
+
+	$matches = get_posts(
+		array(
+			'post_type'      => 'wp_block',
+			'post_status'    => 'any',
+			'posts_per_page' => 1,
+			'meta_key'       => '_mcp_wp_pattern_name',
+			'meta_value'     => sanitize_text_field( $name ),
+			'no_found_rows'  => true,
+		)
+	);
+
+	return ! empty( $matches ) && $matches[0] instanceof WP_Post ? $matches[0] : null;
+}
+
+/**
+ * Create or update a persisted MCP pattern post.
+ *
+ * @param string $name Pattern name/slug.
+ * @param array<string,mixed> $pattern_data Pattern data.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_wp_capabilities_upsert_pattern_post( string $name, array $pattern_data ) {
+	$title    = sanitize_text_field( (string) ( $pattern_data['title'] ?? 'Generated Pattern' ) );
+	$content  = (string) ( $pattern_data['content'] ?? '' );
+	$slug     = mcp_wp_capabilities_normalize_pattern_post_slug( $name );
+	$category = sanitize_text_field( (string) ( $pattern_data['category'] ?? 'mcp-wp' ) );
+
+	if ( '' === $slug || '' === trim( $content ) ) {
+		return new WP_Error( 'mcp_wp_pattern_missing_fields', 'Pattern name and content are required.' );
+	}
+
+	$post_data = array(
+		'post_type'    => 'wp_block',
+		'post_name'    => $slug,
+		'post_title'   => '' !== $title ? $title : $slug,
+		'post_content' => $content,
+		'post_status'  => 'publish',
+	);
+
+	$existing = mcp_wp_capabilities_find_pattern_post( $name );
+	if ( $existing instanceof WP_Post ) {
+		$post_data['ID'] = $existing->ID;
+		$post_id         = wp_update_post( $post_data, true );
+	} else {
+		$post_id = wp_insert_post( $post_data, true );
+	}
+
+	if ( is_wp_error( $post_id ) || 0 === (int) $post_id ) {
+		return is_wp_error( $post_id )
+			? $post_id
+			: new WP_Error( 'mcp_wp_pattern_insert_failed', 'Failed to create pattern post.' );
+	}
+
+	$post_id = (int) $post_id;
+	update_post_meta( $post_id, '_mcp_wp_pattern_managed', '1' );
+	update_post_meta( $post_id, '_mcp_wp_pattern_name', sanitize_text_field( $name ) );
+	update_post_meta( $post_id, '_mcp_wp_pattern_category', $category );
+	update_post_meta( $post_id, '_mcp_wp_pattern_description', sanitize_text_field( (string) ( $pattern_data['description'] ?? '' ) ) );
+	update_post_meta( $post_id, '_mcp_wp_pattern_keywords', array_values( array_filter( array_map( 'sanitize_text_field', (array) ( $pattern_data['keywords'] ?? array() ) ) ) ) );
+
+	$post = get_post( $post_id );
+	if ( $post instanceof WP_Post ) {
+		mcp_wp_capabilities_register_pattern_post( $post );
+	}
+
+	return $post instanceof WP_Post ? mcp_wp_capabilities_pattern_post_response( $post ) : array();
+}
+
+/**
  * Register the ability category
  */
 function mcp_wp_capabilities_register_category() {

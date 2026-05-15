@@ -1,2 +1,6 @@
 .history
 .kiro/settings
+.omc
+tests/.env
+tests/results.json
+*.sh

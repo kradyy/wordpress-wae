@@ -114,7 +114,9 @@ function mcp_wp_register_get_pattern() {
 			},
 			'execute_callback'    => static function ( array $input ) {
 				$pattern_name = sanitize_text_field( $input['pattern_name'] );
-				$pattern      = MCP_WP_Ability_Helpers::get_pattern_by_name( $pattern_name );
+				$pattern      = function_exists( 'mcp_wp_capabilities_find_pattern_post' )
+					? mcp_wp_capabilities_find_pattern_post( $pattern_name )
+					: null;
 
 				if ( ! $pattern ) {
 					return array(
@@ -125,7 +127,9 @@ function mcp_wp_register_get_pattern() {
 
 				return array(
 					'success' => true,
-					'data'    => $pattern,
+					'data'    => function_exists( 'mcp_wp_capabilities_pattern_post_response' )
+						? mcp_wp_capabilities_pattern_post_response( $pattern )
+						: $pattern,
 				);
 			},
 			'meta'                => array(
@@ -181,18 +185,23 @@ function mcp_wp_register_create_pattern() {
 					'keywords'    => isset( $input['keywords'] ) ? array_map( 'sanitize_text_field', (array) $input['keywords'] ) : array(),
 				);
 
-				if ( function_exists( 'register_block_pattern' ) ) {
-					register_block_pattern( $pattern_data['name'], $pattern_data );
-
+				if ( function_exists( 'mcp_wp_capabilities_upsert_pattern_post' ) ) {
+					$result = mcp_wp_capabilities_upsert_pattern_post( $pattern_data['name'], $pattern_data );
+					if ( is_wp_error( $result ) ) {
+						return array(
+							'success' => false,
+							'error'   => $result->get_error_message(),
+						);
+					}
 					return array(
 						'success' => true,
-						'data'    => $pattern_data,
+						'data'    => $result,
 					);
 				}
 
 				return array(
 					'success' => false,
-					'error'   => 'Block patterns not supported in this WordPress version',
+					'error'   => 'Persistent block patterns not supported in this environment',
 				);
 			},
 			'meta'                => array(
@@ -240,7 +249,9 @@ function mcp_wp_register_edit_pattern() {
 			},
 			'execute_callback'    => static function ( array $input ) {
 				$pattern_name = sanitize_text_field( $input['pattern_name'] );
-				$existing     = MCP_WP_Ability_Helpers::get_pattern_by_name( $pattern_name );
+				$existing     = function_exists( 'mcp_wp_capabilities_find_pattern_post' )
+					? mcp_wp_capabilities_find_pattern_post( $pattern_name )
+					: null;
 
 				if ( ! $existing ) {
 					return array(
@@ -249,17 +260,27 @@ function mcp_wp_register_edit_pattern() {
 					);
 				}
 
-				$updated = array_merge( $existing, array_filter( array(
-					'title'       => isset( $input['title'] ) ? sanitize_text_field( $input['title'] ) : null,
-					'content'     => isset( $input['content'] ) ? wp_kses_post( $input['content'] ) : null,
-					'category'    => isset( $input['category'] ) ? sanitize_text_field( $input['category'] ) : null,
-					'description' => isset( $input['description'] ) ? sanitize_text_field( $input['description'] ) : null,
-					'keywords'    => isset( $input['keywords'] ) ? array_map( 'sanitize_text_field', (array) $input['keywords'] ) : null,
-				), static function ( $val ) { return $val !== null; } ) );
+				$updated = array(
+					'title'       => isset( $input['title'] ) ? sanitize_text_field( $input['title'] ) : $existing->post_title,
+					'content'     => isset( $input['content'] ) ? wp_kses_post( $input['content'] ) : $existing->post_content,
+					'category'    => isset( $input['category'] ) ? sanitize_text_field( $input['category'] ) : (string) get_post_meta( $existing->ID, '_mcp_wp_pattern_category', true ),
+					'description' => isset( $input['description'] ) ? sanitize_text_field( $input['description'] ) : (string) get_post_meta( $existing->ID, '_mcp_wp_pattern_description', true ),
+					'keywords'    => isset( $input['keywords'] ) ? array_map( 'sanitize_text_field', (array) $input['keywords'] ) : (array) get_post_meta( $existing->ID, '_mcp_wp_pattern_keywords', true ),
+				);
+				$result  = function_exists( 'mcp_wp_capabilities_upsert_pattern_post' )
+					? mcp_wp_capabilities_upsert_pattern_post( $pattern_name, $updated )
+					: new WP_Error( 'mcp_wp_pattern_unavailable', 'Persistent pattern storage unavailable.' );
+
+				if ( is_wp_error( $result ) ) {
+					return array(
+						'success' => false,
+						'error'   => $result->get_error_message(),
+					);
+				}
 
 				return array(
 					'success' => true,
-					'data'    => $updated,
+					'data'    => $result,
 				);
 			},
 			'meta'                => array(
@@ -302,7 +323,9 @@ function mcp_wp_register_delete_pattern() {
 			},
 			'execute_callback'    => static function ( array $input ) {
 				$pattern_name = sanitize_text_field( $input['pattern_name'] );
-				$pattern      = MCP_WP_Ability_Helpers::get_pattern_by_name( $pattern_name );
+				$pattern      = function_exists( 'mcp_wp_capabilities_find_pattern_post' )
+					? mcp_wp_capabilities_find_pattern_post( $pattern_name )
+					: null;
 
 				if ( ! $pattern ) {
 					return array(
@@ -311,8 +334,14 @@ function mcp_wp_register_delete_pattern() {
 					);
 				}
 
-				if ( function_exists( 'unregister_block_pattern' ) ) {
-					unregister_block_pattern( $pattern_name );
+				if ( function_exists( 'unregister_block_pattern' ) && function_exists( 'mcp_wp_capabilities_get_pattern_registry_names' ) ) {
+					foreach ( mcp_wp_capabilities_get_pattern_registry_names( $pattern ) as $registered_name ) {
+						unregister_block_pattern( $registered_name );
+					}
+				}
+
+				$deleted = wp_delete_post( $pattern->ID, true );
+				if ( $deleted ) {
 					return array(
 						'success' => true,
 						'message' => 'Pattern deleted successfully',

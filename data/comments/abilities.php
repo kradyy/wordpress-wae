@@ -413,7 +413,7 @@ function mcp_wp_register_delete_comment() {
 				'type'       => 'object',
 				'properties' => array(
 					'comment_id' => array( 'type' => 'integer', 'description' => 'Comment ID' ),
-					'force'      => array( 'type' => 'boolean', 'description' => 'Permanently delete (default true)' ),
+					'force'      => array( 'type' => 'boolean', 'description' => 'Permanently delete (default false; comment is trashed otherwise)' ),
 				),
 				'required'   => array( 'comment_id' ),
 			),
@@ -430,7 +430,7 @@ function mcp_wp_register_delete_comment() {
 			},
 			'execute_callback'    => static function ( array $input ) {
 				$comment_id = absint( $input['comment_id'] );
-				$force      = array_key_exists( 'force', $input ) ? (bool) $input['force'] : true;
+				$force      = array_key_exists( 'force', $input ) ? (bool) $input['force'] : false;
 				$comment    = get_comment( $comment_id );
 
 				if ( ! $comment instanceof \WP_Comment ) {

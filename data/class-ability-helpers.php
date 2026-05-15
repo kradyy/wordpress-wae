@@ -120,7 +120,7 @@ class MCP_WP_Ability_Helpers {
 	public static function get_all_patterns(): array {
 		$patterns = array();
 
-		if ( function_exists( 'WP_Block_Patterns_Registry' ) ) {
+		if ( class_exists( 'WP_Block_Patterns_Registry' ) ) {
 			$registry = \WP_Block_Patterns_Registry::get_instance();
 			$all      = $registry->get_all_registered();
 
@@ -146,7 +146,7 @@ class MCP_WP_Ability_Helpers {
 	 * @return array|null Pattern data or null if not found.
 	 */
 	public static function get_pattern_by_name( string $pattern_name ) {
-		if ( function_exists( 'WP_Block_Patterns_Registry' ) ) {
+		if ( class_exists( 'WP_Block_Patterns_Registry' ) ) {
 			$registry = \WP_Block_Patterns_Registry::get_instance();
 			$pattern  = $registry->get_registered( $pattern_name );
 

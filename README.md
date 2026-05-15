@@ -2,7 +2,7 @@
 
 WordPress MCP capability plugin built on top of the WordPress Abilities API and MCP Adapter.
 
-This plugin currently exposes **84 public `mcp-wp/*` abilities** on the MCP endpoint and is designed for AI agent workflows.
+This plugin currently exposes **85 public `mcp-wp/*` abilities** on the MCP endpoint and is designed for AI agent workflows.
 
 ## What It Covers
 
@@ -18,6 +18,7 @@ This plugin currently exposes **84 public `mcp-wp/*` abilities** on the MCP endp
 - Controlled settings reads/writes (allowlisted updates)
 - Plugin/theme lifecycle operations (install/update/delete/activate/deactivate/switch)
 - Advanced helpers (batch update, clone, custom REST calls, pattern import/export)
+- Rendered frontend HTML inspection for selector-safe styling work
 
 ## Ability Modules
 
@@ -32,9 +33,9 @@ This plugin currently exposes **84 public `mcp-wp/*` abilities** on the MCP endp
 - `taxonomy` (6)
 - `settings` (4)
 - `plugins` (14)
-- `advanced` (7)
+- `advanced` (8)
 
-Total: **84 abilities**
+Total: **85 abilities**
 
 ## Full Ability List
 
@@ -139,6 +140,7 @@ Total: **84 abilities**
 
 ### advanced
 - `mcp-wp/custom-rest-call`
+- `mcp-wp/get-rendered-page-html`
 - `mcp-wp/query-posts-advanced`
 - `mcp-wp/batch-update`
 - `mcp-wp/export-pattern`
@@ -227,6 +229,26 @@ Coverage in smoke:
 - Settings update
 - Plugin/theme lifecycle operations and guard checks
 
+## Local Test Setup
+
+The `tests.sh` and `diagnose.sh` scripts no longer contain hardcoded credentials. To run them locally:
+
+1. Copy the template:
+   ```bash
+   cp tests/.env.example tests/.env
+   ```
+2. Edit `tests/.env` and set:
+   - `MCP_USERNAME` — your WordPress username
+   - `MCP_PASSWORD` — a WordPress Application Password (Users → Profile → Application Passwords)
+   - `HTTPS_URL` — your WP base URL (default: `https://127.0.0.1:9443`)
+3. Run:
+   ```bash
+   bash diagnose.sh
+   bash tests.sh
+   ```
+
+`tests/.env` is gitignored. **If a previously hardcoded password was committed, rotate it now**: log into WP admin → Users → Profile → Application Passwords → revoke the old token and create a new one.
+
 ## Security Notes
 
 - Every ability uses capability checks.
@@ -243,6 +265,7 @@ Coverage in smoke:
 
 - `bash diagnose.sh` for endpoint and registration diagnostics
 - `bash tests.sh` for local scripted checks
+- `bash tests/run-all.sh` (when present) for the full smoke-test harness — see [Local Test Setup](#local-test-setup) for credentials.
 
 ## License
 

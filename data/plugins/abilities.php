@@ -401,16 +401,7 @@ function mcp_wp_register_get_theme_supports() {
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
-				'properties' => array(
-					'search'      => array(
-						'type'        => 'string',
-						'description' => 'Optional search filter for theme name or stylesheet',
-					),
-					'active_only' => array(
-						'type'        => 'boolean',
-						'description' => 'When true, only active themes are returned',
-					),
-				),
+				'properties' => array(),
 			),
 			'output_schema'       => array(
 				'type'       => 'object',
@@ -765,7 +756,17 @@ function mcp_wp_register_list_themes() {
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
-				'properties' => array(),
+				'properties' => array(
+					'search'      => array(
+						'type'        => 'string',
+						'description' => 'Filter themes by name (case-insensitive partial match).',
+					),
+					'active_only' => array(
+						'type'        => 'boolean',
+						'description' => 'If true, only return the currently active theme.',
+						'default'     => false,
+					),
+				),
 			),
 			'output_schema'       => array(
 				'type'       => 'object',
