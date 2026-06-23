@@ -203,7 +203,7 @@ function mcp_wp_register_edit_page() {
 		'mcp-wp/edit-page',
 		array(
 			'label'               => __( 'Edit Page', 'mcp-wp-capabilities' ),
-			'description'         => __( 'Modify existing page', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Modify existing page. WARNING: sends the full page content (~50-100KB). Only use this when restructuring or rewriting the full page. For any targeted text change (heading, paragraph, word), use mcp-wp/search-replace-content instead — it is faster and uses far fewer tokens.', 'mcp-wp-capabilities' ),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -632,7 +632,7 @@ function mcp_wp_register_edit_post() {
 		'mcp-wp/edit-post',
 		array(
 			'label'               => __( 'Edit Post', 'mcp-wp-capabilities' ),
-			'description'         => __( 'Modify existing post', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Modify existing post. WARNING: sends the full post content (~50-100KB). Only use this when restructuring or rewriting the full post. For any targeted text change (heading, paragraph, word), use mcp-wp/search-replace-content instead — it is faster and uses far fewer tokens.', 'mcp-wp-capabilities' ),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -967,6 +967,91 @@ function mcp_wp_register_delete_post() {
 }
 
 /**
+ * 11. Search & Replace Content
+ */
+function mcp_wp_register_search_replace_content() {
+	wp_register_ability(
+		'mcp-wp/search-replace-content',
+		array(
+			'label'               => __( 'Search & Replace Content', 'mcp-wp-capabilities' ),
+			'description'         => __( 'PREFERRED tool for any targeted text edit in a post or page. Only requires post_id + the exact text to find and replace — no full content needed. Use this instead of edit-page/edit-post whenever you are changing specific text (a heading, a word, a sentence, a URL, a class). Only fall back to edit-page/edit-post when adding/removing/restructuring entire blocks.', 'mcp-wp-capabilities' ),
+			'category'            => 'mcp-wp',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'post_id'     => array( 'type' => 'integer', 'description' => 'Post or page ID' ),
+					'search'      => array( 'type' => 'string', 'description' => 'Exact text to search for' ),
+					'replace'     => array( 'type' => 'string', 'description' => 'Text to replace it with' ),
+					'replace_all' => array( 'type' => 'boolean', 'description' => 'Replace all occurrences (default: false, replaces only the first)' ),
+				),
+				'required'   => array( 'post_id', 'search', 'replace' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'      => array( 'type' => 'boolean' ),
+					'post_id'      => array( 'type' => 'integer' ),
+					'replacements' => array( 'type' => 'integer', 'description' => 'Number of replacements made' ),
+					'error'        => array( 'type' => 'string' ),
+				),
+			),
+			'permission_callback' => static function ( $input = array() ) {
+				$payload = is_array( $input ) ? $input : array();
+				$post_id = absint( $payload['post_id'] ?? 0 );
+				if ( $post_id > 0 ) {
+					if ( current_user_can( 'edit_post', $post_id ) ) {
+						return true;
+					}
+					return new \WP_Error( 'insufficient_capability', 'Current user cannot edit this content.' );
+				}
+				return MCP_WP_Ability_Helpers::check_user_capability( 'edit_posts' );
+			},
+			'execute_callback'    => static function ( array $input ) {
+				$post_id     = absint( $input['post_id'] );
+				$search      = (string) $input['search'];
+				$replace     = (string) $input['replace'];
+				$replace_all = ! empty( $input['replace_all'] );
+
+				$post = get_post( $post_id );
+
+				if ( ! $post ) {
+					return array( 'success' => false, 'error' => "Post {$post_id} not found" );
+				}
+
+				$content = $post->post_content;
+
+				if ( strpos( $content, $search ) === false ) {
+					return array( 'success' => false, 'error' => 'Search string not found in content' );
+				}
+
+				if ( $replace_all ) {
+					$count   = substr_count( $content, $search );
+					$updated = str_replace( $search, $replace, $content );
+				} else {
+					$count   = 1;
+					$pos     = strpos( $content, $search );
+					$updated = substr_replace( $content, $replace, $pos, strlen( $search ) );
+				}
+
+				$result = wp_update_post( array( 'ID' => $post_id, 'post_content' => $updated ), true );
+
+				if ( is_wp_error( $result ) ) {
+					return array( 'success' => false, 'error' => $result->get_error_message() );
+				}
+
+				return array( 'success' => true, 'post_id' => $post_id, 'replacements' => $count );
+			},
+			'meta'                => array(
+				'mcp' => array(
+					'public' => true,
+					'type'   => 'tool',
+				),
+			),
+		)
+	);
+}
+
+/**
  * Register all post/page abilities
  */
 function mcp_wp_register_posts_abilities() {
@@ -980,4 +1065,5 @@ function mcp_wp_register_posts_abilities() {
 	mcp_wp_register_get_post();
 	mcp_wp_register_list_posts();
 	mcp_wp_register_delete_post();
+	mcp_wp_register_search_replace_content();
 }
