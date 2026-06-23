@@ -2,11 +2,11 @@
 
 WordPress MCP capability plugin built on top of the WordPress Abilities API and MCP Adapter.
 
-This plugin currently exposes **85 public `mcp-wp/*` abilities** on the MCP endpoint and is designed for AI agent workflows.
+This plugin currently exposes **86 public `mcp-wp/*` abilities** on the MCP endpoint and is designed for AI agent workflows.
 
 ## What It Covers
 
-- Full CRUD for posts/pages
+- Full CRUD for posts/pages (prefer `mcp-wp/search-replace-content` for targeted text edits)
 - Full CRUD for comments
 - Generic CPT CRUD (`post_type`-driven)
 - Menu CRUD (menus, menu items, menu locations)
@@ -22,7 +22,7 @@ This plugin currently exposes **85 public `mcp-wp/*` abilities** on the MCP endp
 
 ## Ability Modules
 
-- `posts` (10)
+- `posts` (11)
 - `comments` (5)
 - `cpt` (5)
 - `menus` (10)
@@ -35,11 +35,12 @@ This plugin currently exposes **85 public `mcp-wp/*` abilities** on the MCP endp
 - `plugins` (14)
 - `advanced` (8)
 
-Total: **85 abilities**
+Total: **86 abilities**
 
 ## Full Ability List
 
 ### posts
+
 - `mcp-wp/create-page`
 - `mcp-wp/edit-page`
 - `mcp-wp/get-page`
@@ -50,8 +51,10 @@ Total: **85 abilities**
 - `mcp-wp/get-post`
 - `mcp-wp/list-posts`
 - `mcp-wp/delete-post`
+- `mcp-wp/search-replace-content`
 
 ### comments
+
 - `mcp-wp/list-comments`
 - `mcp-wp/get-comment`
 - `mcp-wp/create-comment`
@@ -59,6 +62,7 @@ Total: **85 abilities**
 - `mcp-wp/delete-comment`
 
 ### cpt
+
 - `mcp-wp/list-content`
 - `mcp-wp/get-content`
 - `mcp-wp/create-content`
@@ -66,6 +70,7 @@ Total: **85 abilities**
 - `mcp-wp/delete-content`
 
 ### menus
+
 - `mcp-wp/list-menus`
 - `mcp-wp/get-menu`
 - `mcp-wp/create-menu`
@@ -78,6 +83,7 @@ Total: **85 abilities**
 - `mcp-wp/delete-menu-item`
 
 ### fse
+
 - `mcp-wp/list-block-entities`
 - `mcp-wp/get-block-entity`
 - `mcp-wp/create-block-entity`
@@ -85,6 +91,7 @@ Total: **85 abilities**
 - `mcp-wp/delete-block-entity`
 
 ### patterns
+
 - `mcp-wp/list-patterns`
 - `mcp-wp/get-pattern`
 - `mcp-wp/create-pattern`
@@ -94,6 +101,7 @@ Total: **85 abilities**
 - `mcp-wp/validate-blocks`
 
 ### media
+
 - `mcp-wp/upload-media`
 - `mcp-wp/list-media`
 - `mcp-wp/get-media`
@@ -102,6 +110,7 @@ Total: **85 abilities**
 - `mcp-wp/delete-media`
 
 ### users
+
 - `mcp-wp/list-users`
 - `mcp-wp/get-user`
 - `mcp-wp/get-current-user`
@@ -109,6 +118,7 @@ Total: **85 abilities**
 - `mcp-wp/edit-user`
 
 ### taxonomy
+
 - `mcp-wp/list-categories`
 - `mcp-wp/list-tags`
 - `mcp-wp/create-category`
@@ -117,12 +127,14 @@ Total: **85 abilities**
 - `mcp-wp/delete-term`
 
 ### settings
+
 - `mcp-wp/get-settings`
 - `mcp-wp/get-gutenberg-settings`
 - `mcp-wp/get-site-stats`
 - `mcp-wp/update-settings`
 
 ### plugins
+
 - `mcp-wp/list-plugins`
 - `mcp-wp/get-plugin`
 - `mcp-wp/activate-plugin`
@@ -139,6 +151,7 @@ Total: **85 abilities**
 - `mcp-wp/delete-theme`
 
 ### advanced
+
 - `mcp-wp/custom-rest-call`
 - `mcp-wp/get-rendered-page-html`
 - `mcp-wp/query-posts-advanced`
@@ -151,11 +164,13 @@ Total: **85 abilities**
 ## Installation
 
 ### Prerequisites
+
 - WordPress 6.9+ (Abilities API)
 - MCP Adapter plugin active
 - Application Password for the WordPress user that will authenticate MCP
 
 ### Steps
+
 1. Install and activate `mcp-adapter`.
 2. Copy this plugin to `wp-content/plugins/wordpress-wae`.
 3. Activate this plugin.
@@ -183,6 +198,7 @@ Total: **85 abilities**
 ## MCP Call Pattern
 
 MCP Adapter exposes 3 tools:
+
 - `mcp-adapter-discover-abilities`
 - `mcp-adapter-get-ability-info`
 - `mcp-adapter-execute-ability`
@@ -208,46 +224,6 @@ Execution example:
   }
 }
 ```
-
-## Live Verification (2026-03-20)
-
-Verified against:
-- `https://testar-ai-funktioner-c4781b3.site.mild-wp.com/wp-json/mcp/mcp-adapter-default-server`
-
-Authenticated with Application Password and ran full HTTP smoke tests.
-
-Result:
-- **32/32 checks passed**
-
-Coverage in smoke:
-- Ability exposure checks
-- Generic content CRUD
-- Comment CRUD
-- Taxonomy create/edit/delete
-- Media upload/edit/replace/delete
-- FSE entity CRUD
-- Settings update
-- Plugin/theme lifecycle operations and guard checks
-
-## Local Test Setup
-
-The `tests.sh` and `diagnose.sh` scripts no longer contain hardcoded credentials. To run them locally:
-
-1. Copy the template:
-   ```bash
-   cp tests/.env.example tests/.env
-   ```
-2. Edit `tests/.env` and set:
-   - `MCP_USERNAME` — your WordPress username
-   - `MCP_PASSWORD` — a WordPress Application Password (Users → Profile → Application Passwords)
-   - `HTTPS_URL` — your WP base URL (default: `https://127.0.0.1:9443`)
-3. Run:
-   ```bash
-   bash diagnose.sh
-   bash tests.sh
-   ```
-
-`tests/.env` is gitignored. **If a previously hardcoded password was committed, rotate it now**: log into WP admin → Users → Profile → Application Passwords → revoke the old token and create a new one.
 
 ## Security Notes
 
