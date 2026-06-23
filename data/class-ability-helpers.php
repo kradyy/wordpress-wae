@@ -222,7 +222,7 @@ class MCP_WP_Ability_Helpers {
 	 * @return array Array of block types.
 	 */
 	public static function get_block_types( string $namespace = '', bool $include_deprecated = false ): array {
-		$block_types = \WP_Block_Type_Registry::get_instance()->get_registered();
+		$block_types = \WP_Block_Type_Registry::get_instance()->get_all_registered();
 		$result      = array();
 
 		foreach ( $block_types as $block_type ) {

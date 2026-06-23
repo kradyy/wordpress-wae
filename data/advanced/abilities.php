@@ -184,6 +184,7 @@ function mcp_wp_register_get_rendered_page_html() {
 					array(
 						'timeout'     => 20,
 						'redirection' => 5,
+						'sslverify'   => false,
 						'headers'     => array(
 							'Accept'     => 'text/html,application/xhtml+xml',
 							'User-Agent' => 'mcp-wp-rendered-html/1.0',

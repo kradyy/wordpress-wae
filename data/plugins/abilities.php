@@ -1196,4 +1196,19 @@ function mcp_wp_register_plugins_abilities() {
 	mcp_wp_register_delete_theme();
 	mcp_wp_register_get_theme();
 	mcp_wp_register_get_theme_supports();
+
+	// Load plugin-specific ability modules.
+	$plugin_modules = array(
+		'acf' => __DIR__ . '/acf/abilities.php',
+	);
+
+	foreach ( $plugin_modules as $module => $path ) {
+		if ( file_exists( $path ) ) {
+			require_once $path;
+			$fn = 'mcp_wp_register_' . $module . '_abilities';
+			if ( function_exists( $fn ) ) {
+				call_user_func( $fn );
+			}
+		}
+	}
 }
