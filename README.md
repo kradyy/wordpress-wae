@@ -242,6 +242,9 @@ Execution example:
 - `bash diagnose.sh` for endpoint and registration diagnostics
 - `bash tests.sh` for local scripted checks
 - `bash tests/run-all.sh` (when present) for the full smoke-test harness — see [Local Test Setup](#local-test-setup) for credentials.
+- `bash agent/tests/smoke/run-agent-tests.sh` for Socket.IO smoke tests against the running AI agent (connect, ensure_repo, get_history, optional chat_message)
+- `bash agent/tests/e2e/run-agent-mcp-e2e.sh` for full real usage E2E (agent + MCP): list pages, create page with CTA, replace text, verify, and cleanup (stored in git-excluded agent tests so plugin updates do not remove it).
+- `tests/README.md` for detailed test setup, environment variables, outputs, and troubleshooting for both MCP ability tests and agent smoke tests.
 
 ## License
 
