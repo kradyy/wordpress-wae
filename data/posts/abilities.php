@@ -204,7 +204,7 @@ function mcp_wp_register_edit_page() {
 		'mcp-wp/edit-page',
 		array(
 			'label'               => __('Edit Page', 'mcp-wp-capabilities'),
-			'description'         => __('Modify existing page. WARNING: sends the full page content (~50-100KB). Only use this when restructuring or rewriting the full page. For any targeted text change (heading, paragraph, word), use mcp-wp/search-replace-content instead — it is faster and uses far fewer tokens.', 'mcp-wp-capabilities'),
+			'description'         => __('Modify existing page. Prefer append_content when adding new block sections to an existing page (especially for larger payloads) to avoid resending full content. Use content for full rewrites/restructure. For targeted text edits (heading/word/sentence), use mcp-wp/search-replace-content.', 'mcp-wp-capabilities'),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -212,7 +212,7 @@ function mcp_wp_register_edit_page() {
 					'page_id'        => array('type' => 'integer', 'description' => 'Page ID to edit'),
 					'title'          => array('type' => 'string', 'description' => 'Page title'),
 					'content'        => array('type' => 'string', 'description' => 'Page content'),
-					'append_content' => array('type' => 'string', 'description' => 'Append block/html content to current page content without resending full page body'),
+					'append_content' => array('type' => 'string', 'description' => 'Append only the new block/html delta to existing page content (recommended for large additions)'),
 					'status'         => array('type' => 'string', 'enum' => array('draft', 'publish', 'private')),
 					'slug'           => array('type' => 'string', 'description' => 'Page slug'),
 					'parent_id'      => array('type' => 'integer', 'description' => 'Parent page ID'),

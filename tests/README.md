@@ -199,3 +199,33 @@ Set AGENT_DIR correctly or set AGENT_SOCKET_IO_CLIENT_PATH manually.
    - bash tests/run-all.sh
 
 This keeps agent orchestration validation and ability-level validation separate, fast, and easier to debug.
+
+## Practical Integration: edit-page performance
+
+Use this decision rule in day-to-day MCP usage:
+
+1. Targeted text change (single heading/paragraph/word/URL):
+
+- Use `mcp-wp/search-replace-content`
+
+2. Add new large block sections to existing page:
+
+- Use `mcp-wp/edit-page` with `append_content`
+
+3. Full rewrite/restructure of whole page:
+
+- Use `mcp-wp/edit-page` with `content`
+
+Recommended threshold from benchmark runs:
+
+- At around 200KB+ additions, `append_content` is typically faster and sends significantly less payload.
+
+Extended benchmark commands (from `agent/tests`):
+
+```bash
+# Optimized mode (append_content)
+TEST_SITE_KEY=sdk EDIT_PAGE_USE_APPEND_DELTA=1 EDIT_PAGE_SIZE_KB='64,256,512,1024' EDIT_PAGE_RUNS=8 node e2e/benchmark-edit-page-large.cjs
+
+# Baseline mode (full merged content)
+TEST_SITE_KEY=sdk EDIT_PAGE_USE_APPEND_DELTA=0 EDIT_PAGE_SIZE_KB='64,256,512,1024' EDIT_PAGE_RUNS=8 node e2e/benchmark-edit-page-large.cjs
+```
