@@ -164,7 +164,7 @@ function mcp_wp_register_create_page() {
 					$page_data['page_template'] = sanitize_text_field($input['template']);
 				}
 
-				$page_id = wp_insert_post($page_data);
+				$page_id = wp_insert_post( wp_slash( $page_data ) );
 
 				if (is_wp_error($page_id)) {
 					return array(
@@ -285,7 +285,7 @@ function mcp_wp_register_edit_page() {
 					$update_data['post_parent'] = absint($input['parent_id']);
 				}
 
-				$result = wp_update_post($update_data);
+				$result = wp_update_post( wp_slash( $update_data ) );
 
 				if (is_wp_error($result)) {
 					return array(
@@ -598,7 +598,7 @@ function mcp_wp_register_create_post() {
 					$post_data['post_excerpt'] = sanitize_text_field($input['excerpt']);
 				}
 
-				$post_id = wp_insert_post($post_data);
+				$post_id = wp_insert_post( wp_slash( $post_data ) );
 
 				if (is_wp_error($post_id)) {
 					return array(
@@ -716,7 +716,7 @@ function mcp_wp_register_edit_post() {
 					$update_data['post_excerpt'] = sanitize_text_field($input['excerpt']);
 				}
 
-				$result = wp_update_post($update_data);
+				$result = wp_update_post( wp_slash( $update_data ) );
 
 				if (is_wp_error($result)) {
 					return array(
@@ -1079,7 +1079,7 @@ function mcp_wp_register_search_replace_content() {
 					return array('success' => false, 'error' => 'Search string not found in content');
 				}
 
-				$result = wp_update_post(array('ID' => $post_id, 'post_content' => $updated), true);
+				$result = wp_update_post(array('ID' => $post_id, 'post_content' => wp_slash( $updated ) ), true );
 
 				if (is_wp_error($result)) {
 					return array('success' => false, 'error' => $result->get_error_message());

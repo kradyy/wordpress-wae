@@ -344,7 +344,7 @@ function mcp_wp_register_create_block_entity() {
 					$post_data['post_name'] = sanitize_title( (string) $input['slug'] );
 				}
 
-				$entity_id = wp_insert_post( $post_data );
+				$entity_id = wp_insert_post( wp_slash( $post_data ) );
 				if ( is_wp_error( $entity_id ) ) {
 					return array(
 						'success' => false,
@@ -457,7 +457,7 @@ function mcp_wp_register_edit_block_entity() {
 					$update_data['post_excerpt'] = sanitize_textarea_field( (string) $input['description'] );
 				}
 
-				$result = wp_update_post( $update_data );
+				$result = wp_update_post( wp_slash( $update_data ) );
 				if ( is_wp_error( $result ) ) {
 					return array(
 						'success' => false,

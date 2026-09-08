@@ -978,7 +978,7 @@ function mcp_wp_register_create_menu_item() {
 					$menu_item_args['menu-item-object-id'] = $object_id;
 				}
 
-				$menu_item_id = wp_update_nav_menu_item( (int) $menu->term_id, 0, $menu_item_args );
+				$menu_item_id = wp_update_nav_menu_item( (int) $menu->term_id, 0, wp_slash( $menu_item_args ) );
 				if ( is_wp_error( $menu_item_id ) ) {
 					return array(
 						'success' => false,
@@ -1118,7 +1118,7 @@ function mcp_wp_register_edit_menu_item() {
 						: (int) $existing->object_id;
 				}
 
-				$result = wp_update_nav_menu_item( $menu_id, $menu_item_id, $menu_item_args );
+				$result = wp_update_nav_menu_item( $menu_id, $menu_item_id, wp_slash( $menu_item_args ) );
 				if ( is_wp_error( $result ) ) {
 					return array(
 						'success' => false,

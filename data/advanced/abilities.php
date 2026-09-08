@@ -391,7 +391,7 @@ function mcp_wp_register_batch_update() {
 									$update[ $field ] = $item[ $field ];
 								}
 							}
-							$result = wp_update_post( $update );
+							$result = wp_update_post( wp_slash( $update ) );
 							if (is_wp_error($result)) {
 								$failed++;
 								$errors[] = $result->get_error_message();
@@ -401,7 +401,7 @@ function mcp_wp_register_batch_update() {
 						} elseif ('term' === $type) {
 							$term_id = absint($item['id'] ?? 0);
 							if ($term_id) {
-								$result = wp_update_term($term_id, $item['taxonomy'] ?? 'category', (array) $item);
+								$result = wp_update_term( $term_id, $item['taxonomy'] ?? 'category', wp_slash( (array) $item ) );
 								if (is_wp_error($result)) {
 									$failed++;
 									$errors[] = $result->get_error_message();
@@ -688,7 +688,7 @@ function mcp_wp_register_clone_item() {
 					'post_author'  => get_current_user_id(),
 				);
 
-				$new_id = wp_insert_post($cloned_post);
+				$new_id = wp_insert_post( wp_slash( $cloned_post ) );
 
 				if (is_wp_error($new_id)) {
 					return array(

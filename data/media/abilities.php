@@ -85,7 +85,7 @@ function mcp_wp_register_upload_media() {
 					'post_status'    => 'inherit',
 				);
 
-				$attachment_id = wp_insert_attachment( $attachment, $file_path );
+				$attachment_id = wp_insert_attachment( wp_slash( $attachment ), $file_path );
 
 				if ( is_wp_error( $attachment_id ) ) {
 					return array(
@@ -362,7 +362,7 @@ function mcp_wp_register_edit_media() {
 				}
 
 				if ( count( $update_data ) > 1 ) {
-					$result = wp_update_post( $update_data );
+					$result = wp_update_post( wp_slash( $update_data ) );
 					if ( is_wp_error( $result ) ) {
 						return array(
 							'success' => false,
