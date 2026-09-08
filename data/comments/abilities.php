@@ -266,7 +266,7 @@ function mcp_wp_register_create_comment() {
 						: 1,
 				);
 
-				$comment_id = wp_insert_comment( $comment_data );
+				$comment_id = wp_insert_comment( wp_slash( $comment_data ) );
 				if ( ! $comment_id ) {
 					return array(
 						'success' => false,
@@ -363,7 +363,7 @@ function mcp_wp_register_edit_comment() {
 					$update_data['comment_parent'] = absint( $input['parent_id'] );
 				}
 
-				$result = wp_update_comment( $update_data );
+				$result = wp_update_comment( wp_slash( $update_data ) );
 				if ( ! $result ) {
 					return array(
 						'success' => false,

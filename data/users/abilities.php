@@ -237,7 +237,7 @@ function mcp_wp_register_create_user() {
 					'display_name' => isset( $input['display_name'] ) ? sanitize_text_field( $input['display_name'] ) : '',
 				);
 
-				$user_id = wp_insert_user( $user_data );
+				$user_id = wp_insert_user( wp_slash( $user_data ) );
 
 				if ( is_wp_error( $user_id ) ) {
 					return array(
@@ -336,7 +336,7 @@ function mcp_wp_register_edit_user() {
 					$user_data['user_pass'] = $input['password'];
 				}
 
-				$result = wp_update_user( $user_data );
+				$result = wp_update_user( wp_slash( $user_data ) );
 
 				if ( is_wp_error( $result ) ) {
 					return array(

@@ -270,7 +270,7 @@ function mcp_wp_register_create_content() {
 					$post_data['post_author'] = absint( $input['author_id'] );
 				}
 
-				$post_id = wp_insert_post( $post_data );
+				$post_id = wp_insert_post( wp_slash( $post_data ) );
 				if ( is_wp_error( $post_id ) ) {
 					return array(
 						'success' => false,
@@ -596,7 +596,7 @@ function mcp_wp_register_edit_content() {
 					$update_data['post_author'] = absint( $input['author_id'] );
 				}
 
-				$result = wp_update_post( $update_data );
+				$result = wp_update_post( wp_slash( $update_data ) );
 				if ( is_wp_error( $result ) ) {
 					return array(
 						'success' => false,

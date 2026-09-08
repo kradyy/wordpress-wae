@@ -269,9 +269,9 @@ function mcp_wp_capabilities_upsert_pattern_post( string $name, array $pattern_d
 	$existing = mcp_wp_capabilities_find_pattern_post( $name );
 	if ( $existing instanceof WP_Post ) {
 		$post_data['ID'] = $existing->ID;
-		$post_id         = wp_update_post( $post_data, true );
+		$post_id         = wp_update_post( wp_slash( $post_data ), true );
 	} else {
-		$post_id = wp_insert_post( $post_data, true );
+		$post_id = wp_insert_post( wp_slash( $post_data ), true );
 	}
 
 	if ( is_wp_error( $post_id ) || 0 === (int) $post_id ) {

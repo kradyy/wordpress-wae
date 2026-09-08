@@ -204,11 +204,7 @@ function mcp_wp_register_create_category() {
 					$cat_args['parent'] = absint( $input['parent'] );
 				}
 
-				$result = wp_insert_term(
-					sanitize_text_field( $input['name'] ),
-					'category',
-					$cat_args
-				);
+				$result = wp_insert_term( wp_slash( sanitize_text_field( $input['name'] ) ), 'category', wp_slash( $cat_args ) );
 
 				if ( is_wp_error( $result ) ) {
 					return array(
@@ -287,11 +283,7 @@ function mcp_wp_register_create_tag() {
 					$tag_args['slug'] = sanitize_text_field( $input['slug'] );
 				}
 
-				$result = wp_insert_term(
-					sanitize_text_field( $input['name'] ),
-					'post_tag',
-					$tag_args
-				);
+				$result = wp_insert_term( wp_slash( sanitize_text_field( $input['name'] ) ), 'post_tag', wp_slash( $tag_args ) );
 
 				if ( is_wp_error( $result ) ) {
 					return array(
@@ -396,7 +388,7 @@ function mcp_wp_register_edit_term() {
 					);
 				}
 
-				$result = wp_update_term( $term_id, $taxonomy, $args );
+				$result = wp_update_term( $term_id, $taxonomy, wp_slash( $args ) );
 				if ( is_wp_error( $result ) ) {
 					return array(
 						'success' => false,

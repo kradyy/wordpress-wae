@@ -163,7 +163,7 @@ function mcp_wp_register_create_page() {
 					$page_data['page_template'] = sanitize_text_field( $input['template'] );
 				}
 
-				$page_id = wp_insert_post( $page_data );
+				$page_id = wp_insert_post( wp_slash( $page_data ) );
 
 				if ( is_wp_error( $page_id ) ) {
 					return array(
@@ -271,7 +271,7 @@ function mcp_wp_register_edit_page() {
 					$update_data['post_parent'] = absint( $input['parent_id'] );
 				}
 
-				$result = wp_update_post( $update_data );
+				$result = wp_update_post( wp_slash( $update_data ) );
 
 				if ( is_wp_error( $result ) ) {
 					return array(
@@ -584,7 +584,7 @@ function mcp_wp_register_create_post() {
 					$post_data['post_excerpt'] = sanitize_text_field( $input['excerpt'] );
 				}
 
-				$post_id = wp_insert_post( $post_data );
+				$post_id = wp_insert_post( wp_slash( $post_data ) );
 
 				if ( is_wp_error( $post_id ) ) {
 					return array(
@@ -702,7 +702,7 @@ function mcp_wp_register_edit_post() {
 					$update_data['post_excerpt'] = sanitize_text_field( $input['excerpt'] );
 				}
 
-				$result = wp_update_post( $update_data );
+				$result = wp_update_post( wp_slash( $update_data ) );
 
 				if ( is_wp_error( $result ) ) {
 					return array(
@@ -974,25 +974,29 @@ function mcp_wp_register_search_replace_content() {
 		'mcp-wp/search-replace-content',
 		array(
 			'label'               => __( 'Search & Replace Content', 'mcp-wp-capabilities' ),
-			'description'         => __( 'PREFERRED tool for any targeted text edit in a post or page. Only requires post_id + the exact text to find and replace — no full content needed. Use this instead of edit-page/edit-post whenever you are changing specific text (a heading, a word, a sentence, a URL, a class). Only fall back to edit-page/edit-post when adding/removing/restructuring entire blocks.', 'mcp-wp-capabilities' ),
+			'description'         => __( 'PREFERRED tool for any targeted text edit in a post or page. Only requires post_id + the exact text to find and replace — no full content needed. Use this instead of edit-page/edit-post whenever you are changing specific text (a heading, a word, a sentence, a URL, a class). Only fall back to edit-page/edit-post when adding/removing/restructuring entire blocks. BULK MODE: to apply the same change to MANY posts at once (e.g. "all products", "every recipe", "everywhere on the site"), omit post_id and pass post_type instead (a post type slug such as "post", "page", "produkter", "wp_block", or "any" for all public types). One call then updates every post of that type containing the search string and returns updated_post_ids. Do NOT loop over posts one by one.', 'mcp-wp-capabilities' ),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
-					'post_id'     => array( 'type' => 'integer', 'description' => 'Post or page ID' ),
+					'post_id'     => array( 'type' => 'integer', 'description' => 'Post or page ID (single-post mode). Omit and use post_type or post_ids for bulk mode.' ),
+					'post_type'   => array( 'type' => 'string', 'description' => 'Bulk mode: apply to every post of this post type slug (e.g. "post", "page", "produkter", "wp_block") or "any".' ),
+					'post_ids'    => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Bulk mode: explicit list of post IDs to apply the replacement to.' ),
 					'search'      => array( 'type' => 'string', 'description' => 'Exact text to search for' ),
 					'replace'     => array( 'type' => 'string', 'description' => 'Text to replace it with' ),
-					'replace_all' => array( 'type' => 'boolean', 'description' => 'Replace all occurrences (default: false, replaces only the first)' ),
+					'replace_all' => array( 'type' => 'boolean', 'description' => 'Replace all occurrences (default: false, replaces only the first occurrence per post)' ),
 				),
-				'required'   => array( 'post_id', 'search', 'replace' ),
+				'required'   => array( 'search', 'replace' ),
 			),
 			'output_schema'       => array(
 				'type'       => 'object',
 				'properties' => array(
-					'success'      => array( 'type' => 'boolean' ),
-					'post_id'      => array( 'type' => 'integer' ),
-					'replacements' => array( 'type' => 'integer', 'description' => 'Number of replacements made' ),
-					'error'        => array( 'type' => 'string' ),
+					'success'          => array( 'type' => 'boolean' ),
+					'post_id'          => array( 'type' => 'integer' ),
+					'replacements'     => array( 'type' => 'integer', 'description' => 'Number of replacements made' ),
+					'updated_post_ids' => array( 'type' => 'array', 'description' => 'Bulk mode: IDs of posts that were updated' ),
+					'posts_scanned'    => array( 'type' => 'integer', 'description' => 'Bulk mode: number of posts examined' ),
+					'error'            => array( 'type' => 'string' ),
 				),
 			),
 			'permission_callback' => static function ( $input = array() ) {
@@ -1007,39 +1011,103 @@ function mcp_wp_register_search_replace_content() {
 				return MCP_WP_Ability_Helpers::check_user_capability( 'edit_posts' );
 			},
 			'execute_callback'    => static function ( array $input ) {
-				$post_id     = absint( $input['post_id'] );
-				$search      = (string) $input['search'];
-				$replace     = (string) $input['replace'];
+				$search      = (string) ( $input['search'] ?? '' );
+				$replace     = (string) ( $input['replace'] ?? '' );
 				$replace_all = ! empty( $input['replace_all'] );
+				$post_id     = absint( $input['post_id'] ?? 0 );
+				$post_type   = sanitize_key( (string) ( $input['post_type'] ?? '' ) );
+				$post_ids    = array_values( array_filter( array_map( 'absint', (array) ( $input['post_ids'] ?? array() ) ) ) );
 
-				$post = get_post( $post_id );
-
-				if ( ! $post ) {
-					return array( 'success' => false, 'error' => "Post {$post_id} not found" );
+				if ( '' === $search ) {
+					return array( 'success' => false, 'error' => 'search must not be empty' );
 				}
 
-				$content = $post->post_content;
+				$apply = static function ( $content ) use ( $search, $replace, $replace_all ) {
+					if ( $replace_all ) {
+						return array( str_replace( $search, $replace, $content ), substr_count( $content, $search ) );
+					}
+					$pos = strpos( $content, $search );
+					return array( substr_replace( $content, $replace, $pos, strlen( $search ) ), 1 );
+				};
 
-				if ( strpos( $content, $search ) === false ) {
-					return array( 'success' => false, 'error' => 'Search string not found in content' );
+				// Single-post mode (original behaviour).
+				if ( $post_id > 0 ) {
+					$post = get_post( $post_id );
+					if ( ! $post ) {
+						return array( 'success' => false, 'error' => "Post {$post_id} not found" );
+					}
+					if ( strpos( $post->post_content, $search ) === false ) {
+						return array( 'success' => false, 'error' => 'Search string not found in content' );
+					}
+					list( $updated, $count ) = $apply( $post->post_content );
+					$result = wp_update_post( array( 'ID' => $post_id, 'post_content' => wp_slash( $updated ) ), true );
+					if ( is_wp_error( $result ) ) {
+						return array( 'success' => false, 'error' => $result->get_error_message() );
+					}
+					return array( 'success' => true, 'post_id' => $post_id, 'replacements' => $count );
 				}
 
-				if ( $replace_all ) {
-					$count   = substr_count( $content, $search );
-					$updated = str_replace( $search, $replace, $content );
-				} else {
-					$count   = 1;
-					$pos     = strpos( $content, $search );
-					$updated = substr_replace( $content, $replace, $pos, strlen( $search ) );
+				// Bulk mode: explicit IDs or every post of a type.
+				if ( empty( $post_ids ) ) {
+					if ( '' === $post_type ) {
+						return array( 'success' => false, 'error' => 'Provide post_id (single post), or post_type / post_ids (bulk).' );
+					}
+					if ( 'any' !== $post_type && ! post_type_exists( $post_type ) ) {
+						return array( 'success' => false, 'error' => "Unknown post_type '{$post_type}'" );
+					}
+					// Loads every post of the type into memory; add a LIKE prefilter if sites grow large.
+					$post_ids = get_posts(
+						array(
+							'post_type'        => $post_type,
+							'post_status'      => array( 'publish', 'draft', 'pending', 'private', 'future' ),
+							'posts_per_page'   => -1,
+							'fields'           => 'ids',
+							'no_found_rows'    => true,
+							'suppress_filters' => false,
+						)
+					);
 				}
 
-				$result = wp_update_post( array( 'ID' => $post_id, 'post_content' => $updated ), true );
-
-				if ( is_wp_error( $result ) ) {
-					return array( 'success' => false, 'error' => $result->get_error_message() );
+				$updated_ids = array();
+				$errors      = array();
+				$total       = 0;
+				foreach ( $post_ids as $id ) {
+					$post = get_post( $id );
+					if ( ! $post || strpos( $post->post_content, $search ) === false ) {
+						continue;
+					}
+					if ( ! current_user_can( 'edit_post', $id ) ) {
+						$errors[ $id ] = 'insufficient_capability';
+						continue;
+					}
+					list( $updated, $count ) = $apply( $post->post_content );
+					$result = wp_update_post( array( 'ID' => $id, 'post_content' => wp_slash( $updated ) ), true );
+					if ( is_wp_error( $result ) ) {
+						$errors[ $id ] = $result->get_error_message();
+						continue;
+					}
+					$updated_ids[] = (int) $id;
+					$total        += $count;
 				}
 
-				return array( 'success' => true, 'post_id' => $post_id, 'replacements' => $count );
+				if ( empty( $updated_ids ) ) {
+					return array(
+						'success'       => false,
+						'error'         => sprintf( 'Search string not found in any of %d posts (%s)', count( $post_ids ), '' !== $post_type ? "post_type={$post_type}" : 'post_ids' ),
+						'posts_scanned' => count( $post_ids ),
+					);
+				}
+
+				$out = array(
+					'success'          => true,
+					'replacements'     => $total,
+					'updated_post_ids' => $updated_ids,
+					'posts_scanned'    => count( $post_ids ),
+				);
+				if ( ! empty( $errors ) ) {
+					$out['errors'] = $errors;
+				}
+				return $out;
 			},
 			'meta'                => array(
 				'mcp' => array(
