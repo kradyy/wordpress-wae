@@ -147,7 +147,7 @@ function mcp_wp_register_create_page() {
 
 				$page_data = array(
 					'post_title'   => sanitize_text_field($input['title']),
-					'post_content' => wp_kses_post(mcp_wp_posts_normalize_block_markup((string) $input['content'])),
+					'post_content' => mcp_wp_kses_content(mcp_wp_posts_normalize_block_markup((string) $input['content'])),
 					'post_status'  => isset($input['status']) ? sanitize_text_field($input['status']) : 'draft',
 					'post_type'    => $post_type,
 				);
@@ -265,11 +265,11 @@ function mcp_wp_register_edit_page() {
 				}
 
 				if (isset($input['content'])) {
-					$update_data['post_content'] = wp_kses_post(mcp_wp_posts_normalize_block_markup((string) $input['content']));
+					$update_data['post_content'] = mcp_wp_kses_content(mcp_wp_posts_normalize_block_markup((string) $input['content']));
 				}
 
 				if (isset($input['append_content'])) {
-					$append_content = wp_kses_post(mcp_wp_posts_normalize_block_markup((string) $input['append_content']));
+					$append_content = mcp_wp_kses_content(mcp_wp_posts_normalize_block_markup((string) $input['append_content']));
 					$update_data['post_content'] = (string) $page->post_content . $append_content;
 				}
 
@@ -585,7 +585,7 @@ function mcp_wp_register_create_post() {
 
 				$post_data = array(
 					'post_title'   => sanitize_text_field($input['title']),
-					'post_content' => wp_kses_post(mcp_wp_posts_normalize_block_markup((string) $input['content'])),
+					'post_content' => mcp_wp_kses_content(mcp_wp_posts_normalize_block_markup((string) $input['content'])),
 					'post_status'  => isset($input['status']) ? sanitize_text_field($input['status']) : 'draft',
 					'post_type'    => $post_type,
 				);
@@ -701,7 +701,7 @@ function mcp_wp_register_edit_post() {
 				}
 
 				if (isset($input['content'])) {
-					$update_data['post_content'] = wp_kses_post(mcp_wp_posts_normalize_block_markup((string) $input['content']));
+					$update_data['post_content'] = mcp_wp_kses_content(mcp_wp_posts_normalize_block_markup((string) $input['content']));
 				}
 
 				if (isset($input['status'])) {

@@ -16,6 +16,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Sanitize block markup like core does: only users without unfiltered_html
+ * go through kses. wp_kses_post() strips rgba() inline colours and
+ * re-encodes & inside block JSON, corrupting Gutenberg content.
+ */
+function mcp_wp_kses_content( $content ) {
+	$content = (string) $content;
+	return current_user_can( 'unfiltered_html' ) ? $content : wp_kses_post( $content );
+}
+
+/**
  * Register all WordPress abilities from all category modules
  */
 function mcp_wp_capabilities_register_all_abilities() {

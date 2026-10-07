@@ -336,7 +336,7 @@ function mcp_wp_register_create_block_entity() {
 					'post_type'    => $entity_type,
 					'post_status'  => $status,
 					'post_title'   => isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : ucfirst( str_replace( 'wp_', '', $entity_type ) ),
-					'post_content' => isset( $input['content'] ) ? wp_kses_post( (string) $input['content'] ) : '',
+					'post_content' => isset( $input['content'] ) ? mcp_wp_kses_content( (string) $input['content'] ) : '',
 					'post_excerpt' => isset( $input['description'] ) ? sanitize_textarea_field( (string) $input['description'] ) : '',
 				);
 
@@ -442,7 +442,7 @@ function mcp_wp_register_edit_block_entity() {
 					$update_data['post_title'] = sanitize_text_field( (string) $input['title'] );
 				}
 				if ( isset( $input['content'] ) ) {
-					$update_data['post_content'] = wp_kses_post( (string) $input['content'] );
+					$update_data['post_content'] = mcp_wp_kses_content( (string) $input['content'] );
 				}
 				if ( isset( $input['status'] ) ) {
 					$status = sanitize_key( (string) $input['status'] );

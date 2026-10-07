@@ -256,7 +256,7 @@ function mcp_wp_register_create_content() {
 					'post_type'   => $post_type,
 					'post_status' => $status,
 					'post_title'  => isset( $input['title'] ) ? sanitize_text_field( (string) $input['title'] ) : '',
-					'post_content'=> isset( $input['content'] ) ? wp_kses_post( (string) $input['content'] ) : '',
+					'post_content'=> isset( $input['content'] ) ? mcp_wp_kses_content( (string) $input['content'] ) : '',
 					'post_excerpt'=> isset( $input['excerpt'] ) ? sanitize_textarea_field( (string) $input['excerpt'] ) : '',
 				);
 
@@ -575,7 +575,7 @@ function mcp_wp_register_edit_content() {
 					$update_data['post_title'] = sanitize_text_field( (string) $input['title'] );
 				}
 				if ( isset( $input['content'] ) ) {
-					$update_data['post_content'] = wp_kses_post( (string) $input['content'] );
+					$update_data['post_content'] = mcp_wp_kses_content( (string) $input['content'] );
 				}
 				if ( isset( $input['excerpt'] ) ) {
 					$update_data['post_excerpt'] = sanitize_textarea_field( (string) $input['excerpt'] );

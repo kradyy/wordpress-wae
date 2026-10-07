@@ -537,7 +537,7 @@ function mcp_wp_register_import_pattern() {
 						sanitize_text_field($pattern_data['name']),
 						array(
 							'title'       => sanitize_text_field($pattern_data['title'] ?? 'Imported Pattern'),
-							'content'     => wp_kses_post($pattern_data['content']),
+							'content'     => mcp_wp_kses_content($pattern_data['content']),
 							'category'    => sanitize_text_field($pattern_data['category'] ?? 'default'),
 							'description' => sanitize_text_field($pattern_data['description'] ?? ''),
 							'keywords'    => isset($pattern_data['keywords']) ? array_map('sanitize_text_field', (array) $pattern_data['keywords']) : array(),

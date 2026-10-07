@@ -179,7 +179,7 @@ function mcp_wp_register_create_pattern() {
 				$pattern_data = array(
 					'title'       => sanitize_text_field( $input['title'] ),
 					'name'        => sanitize_text_field( $input['name'] ),
-					'content'     => wp_kses_post( $input['content'] ),
+					'content'     => mcp_wp_kses_content( $input['content'] ),
 					'category'    => isset( $input['category'] ) ? sanitize_text_field( $input['category'] ) : 'default',
 					'description' => isset( $input['description'] ) ? sanitize_text_field( $input['description'] ) : '',
 					'keywords'    => isset( $input['keywords'] ) ? array_map( 'sanitize_text_field', (array) $input['keywords'] ) : array(),
@@ -262,7 +262,7 @@ function mcp_wp_register_edit_pattern() {
 
 				$updated = array(
 					'title'       => isset( $input['title'] ) ? sanitize_text_field( $input['title'] ) : $existing->post_title,
-					'content'     => isset( $input['content'] ) ? wp_kses_post( $input['content'] ) : $existing->post_content,
+					'content'     => isset( $input['content'] ) ? mcp_wp_kses_content( $input['content'] ) : $existing->post_content,
 					'category'    => isset( $input['category'] ) ? sanitize_text_field( $input['category'] ) : (string) get_post_meta( $existing->ID, '_mcp_wp_pattern_category', true ),
 					'description' => isset( $input['description'] ) ? sanitize_text_field( $input['description'] ) : (string) get_post_meta( $existing->ID, '_mcp_wp_pattern_description', true ),
 					'keywords'    => isset( $input['keywords'] ) ? array_map( 'sanitize_text_field', (array) $input['keywords'] ) : (array) get_post_meta( $existing->ID, '_mcp_wp_pattern_keywords', true ),
