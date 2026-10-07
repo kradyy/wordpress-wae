@@ -132,6 +132,7 @@ Total: **86 abilities**
 - `mcp-wp/get-gutenberg-settings`
 - `mcp-wp/get-site-stats`
 - `mcp-wp/update-settings`
+- `mcp-wp/custom-css`
 
 ### plugins
 

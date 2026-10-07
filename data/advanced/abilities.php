@@ -52,15 +52,20 @@ function mcp_wp_register_custom_rest_call() {
 				$method = sanitize_text_field($input['method']);
 				$params = isset($input['params']) ? (array) $input['params'] : array();
 
-				$request_args = array(
-					'method' => $method,
-				);
+				// The third WP_REST_Request argument is $attributes, not parameters:
+				// params and body have to be set on the request, or every write is a silent no-op.
+				$request = new \WP_REST_Request($method, $route);
 
-				if (in_array($method, array('POST', 'PUT'), true) && isset($input['body'])) {
-					$request_args['body'] = wp_json_encode($input['body']);
+				if ($params) {
+					$request->set_query_params($params);
 				}
 
-				$response = rest_do_request(new \WP_REST_Request($method, $route, array('body' => $params)));
+				if (isset($input['body'])) {
+					$request->set_header('content-type', 'application/json');
+					$request->set_body(wp_json_encode((array) $input['body']));
+				}
+
+				$response = rest_do_request($request);
 
 				if (is_wp_error($response)) {
 					return array(
@@ -70,7 +75,7 @@ function mcp_wp_register_custom_rest_call() {
 				}
 
 				return array(
-					'success' => true,
+					'success' => $response->get_status() < 400,
 					'status'  => $response->get_status(),
 					'data'    => $response->get_data(),
 				);
