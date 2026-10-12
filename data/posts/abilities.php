@@ -988,26 +988,30 @@ function mcp_wp_register_search_replace_content() {
 		'mcp-wp/search-replace-content',
 		array(
 			'label'               => __('Search & Replace Content', 'mcp-wp-capabilities'),
-			'description'         => __('PREFERRED tool for any targeted text edit in a post or page. Only requires post_id + the exact text to find and replace — no full content needed. Use this instead of edit-page/edit-post whenever you are changing specific text (a heading, a word, a sentence, a URL, a class). Only fall back to edit-page/edit-post when adding/removing/restructuring entire blocks.', 'mcp-wp-capabilities'),
+			'description'         => __( 'PREFERRED tool for any targeted text edit in a post or page. Only requires post_id + the exact text to find and replace — no full content needed. Use this instead of edit-page/edit-post whenever you are changing specific text (a heading, a word, a sentence, a URL, a class). Only fall back to edit-page/edit-post when adding/removing/restructuring entire blocks. BULK MODE: to apply the same change to MANY posts at once (e.g. "all products", "every recipe", "everywhere on the site"), omit post_id and pass post_type instead (a post type slug such as "post", "page", "produkter", "wp_block", or "any" for all public types). One call then updates every post of that type containing the search string and returns updated_post_ids. Do NOT loop over posts one by one.', 'mcp-wp-capabilities' ),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
-					'post_id'     => array('type' => 'integer', 'description' => 'Post or page ID'),
+					'post_id'     => array('type' => 'integer', 'description' => 'Post or page ID (single-post mode). Omit and use post_type or post_ids for bulk mode.'),
 					'page_id'     => array('type' => 'integer', 'description' => 'Alias for post_id (accepted for compatibility)'),
+					'post_type'   => array('type' => 'string', 'description' => 'Bulk mode: apply to every post of this post type slug (e.g. "post", "page", "produkter", "wp_block") or "any".'),
+					'post_ids'    => array('type' => 'array', 'items' => array('type' => 'integer'), 'description' => 'Bulk mode: explicit list of post IDs to apply the replacement to.'),
 					'search'      => array('type' => 'string', 'description' => 'Exact text to search for'),
 					'replace'     => array('type' => 'string', 'description' => 'Text to replace it with'),
-					'replace_all' => array('type' => 'boolean', 'description' => 'Replace all occurrences (default: false, replaces only the first)'),
+					'replace_all' => array('type' => 'boolean', 'description' => 'Replace all occurrences (default: false, replaces only the first occurrence per post)'),
 				),
 				'required'   => array('search', 'replace'),
 			),
 			'output_schema'       => array(
 				'type'       => 'object',
 				'properties' => array(
-					'success'      => array('type' => 'boolean'),
-					'post_id'      => array('type' => 'integer'),
-					'replacements' => array('type' => 'integer', 'description' => 'Number of replacements made'),
-					'error'        => array('type' => 'string'),
+					'success'          => array('type' => 'boolean'),
+					'post_id'          => array('type' => 'integer'),
+					'replacements'     => array('type' => 'integer', 'description' => 'Number of replacements made'),
+					'updated_post_ids' => array('type' => 'array', 'description' => 'Bulk mode: IDs of posts that were updated'),
+					'posts_scanned'    => array('type' => 'integer', 'description' => 'Bulk mode: number of posts examined'),
+					'error'            => array('type' => 'string'),
 				),
 			),
 			'permission_callback' => static function ($input = array()) {
@@ -1023,21 +1027,15 @@ function mcp_wp_register_search_replace_content() {
 			},
 			'execute_callback'    => static function (array $input) {
 				$post_id     = absint($input['post_id'] ?? $input['page_id'] ?? 0);
-				$search      = (string) $input['search'];
-				$replace     = (string) $input['replace'];
+				$post_type   = sanitize_key((string) ($input['post_type'] ?? ''));
+				$post_ids    = array_values(array_filter(array_map('absint', (array) ($input['post_ids'] ?? array()))));
+				$search      = (string) ($input['search'] ?? '');
+				$replace     = (string) ($input['replace'] ?? '');
 				$replace_all = ! empty($input['replace_all']);
 
-				if ($post_id <= 0) {
-					return array('success' => false, 'error' => 'post_id (eller page_id) krävs');
+				if ('' === $search) {
+					return array('success' => false, 'error' => 'search must not be empty');
 				}
-
-				$post = get_post($post_id);
-
-				if (! $post) {
-					return array('success' => false, 'error' => "Post {$post_id} not found");
-				}
-
-				$content = (string) $post->post_content;
 
 				$replace_once_or_all = static function (string $haystack, string $needle, string $replacement, bool $replace_all_flag): array {
 					if ('' === $needle || strpos($haystack, $needle) === false) {
@@ -1058,34 +1056,111 @@ function mcp_wp_register_search_replace_content() {
 				$search_normalized  = mcp_wp_posts_normalize_block_markup($search);
 				$replace_normalized = mcp_wp_posts_normalize_block_markup($replace);
 
-				$matched = false;
-				$count   = 0;
-				$updated = $content;
+				// Returns array(matched, updated_content, count), with block markup normalization fallbacks.
+				$apply = static function (string $content) use ($replace_once_or_all, $search, $replace, $replace_all, $search_normalized, $replace_normalized): array {
+					list($matched, $updated, $count) = $replace_once_or_all($content, $search, $replace, $replace_all);
 
-				list($matched, $updated, $count) = $replace_once_or_all($content, $search, $replace, $replace_all);
-
-				if (! $matched && $search_normalized !== $search) {
-					list($matched, $updated, $count) = $replace_once_or_all($content, $search_normalized, $replace_normalized, $replace_all);
-				}
-
-				if (! $matched) {
-					$normalized_content = mcp_wp_posts_normalize_block_markup($content);
-					if ($normalized_content !== $content) {
-						list($matched, $updated, $count) = $replace_once_or_all($normalized_content, $search_normalized, $replace_normalized, $replace_all);
+					if (! $matched && $search_normalized !== $search) {
+						list($matched, $updated, $count) = $replace_once_or_all($content, $search_normalized, $replace_normalized, $replace_all);
 					}
+
+					if (! $matched) {
+						$normalized_content = mcp_wp_posts_normalize_block_markup($content);
+						if ($normalized_content !== $content) {
+							list($matched, $updated, $count) = $replace_once_or_all($normalized_content, $search_normalized, $replace_normalized, $replace_all);
+						}
+					}
+
+					return array($matched, $updated, $count);
+				};
+
+				// Single-post mode.
+				if ($post_id > 0) {
+					$post = get_post($post_id);
+
+					if (! $post) {
+						return array('success' => false, 'error' => "Post {$post_id} not found");
+					}
+
+					list($matched, $updated, $count) = $apply((string) $post->post_content);
+
+					if (! $matched) {
+						return array('success' => false, 'error' => 'Search string not found in content');
+					}
+
+					$result = wp_update_post(array('ID' => $post_id, 'post_content' => wp_slash( $updated ) ), true );
+
+					if (is_wp_error($result)) {
+						return array('success' => false, 'error' => $result->get_error_message());
+					}
+
+					return array('success' => true, 'post_id' => $post_id, 'replacements' => $count);
 				}
 
-				if (! $matched) {
-					return array('success' => false, 'error' => 'Search string not found in content');
+				// Bulk mode: explicit IDs or every post of a type.
+				if (empty($post_ids)) {
+					if ('' === $post_type) {
+						return array('success' => false, 'error' => 'Provide post_id (single post), or post_type / post_ids (bulk).');
+					}
+					if ('any' !== $post_type && ! post_type_exists($post_type)) {
+						return array('success' => false, 'error' => "Unknown post_type '{$post_type}'");
+					}
+					// Loads every post of the type into memory; add a LIKE prefilter if sites grow large.
+					$post_ids = get_posts(
+						array(
+							'post_type'        => $post_type,
+							'post_status'      => array('publish', 'draft', 'pending', 'private', 'future'),
+							'posts_per_page'   => -1,
+							'fields'           => 'ids',
+							'no_found_rows'    => true,
+							'suppress_filters' => false,
+						)
+					);
 				}
 
-				$result = wp_update_post(array('ID' => $post_id, 'post_content' => wp_slash( $updated ) ), true );
-
-				if (is_wp_error($result)) {
-					return array('success' => false, 'error' => $result->get_error_message());
+				$updated_ids = array();
+				$errors      = array();
+				$total       = 0;
+				foreach ($post_ids as $id) {
+					$post = get_post($id);
+					if (! $post) {
+						continue;
+					}
+					list($matched, $updated, $count) = $apply((string) $post->post_content);
+					if (! $matched) {
+						continue;
+					}
+					if (! current_user_can('edit_post', $id)) {
+						$errors[ $id ] = 'insufficient_capability';
+						continue;
+					}
+					$result = wp_update_post(array('ID' => $id, 'post_content' => wp_slash( $updated ) ), true );
+					if (is_wp_error($result)) {
+						$errors[ $id ] = $result->get_error_message();
+						continue;
+					}
+					$updated_ids[] = (int) $id;
+					$total        += $count;
 				}
 
-				return array('success' => true, 'post_id' => $post_id, 'replacements' => $count);
+				if (empty($updated_ids)) {
+					return array(
+						'success'       => false,
+						'error'         => sprintf('Search string not found in any of %d posts (%s)', count($post_ids), '' !== $post_type ? "post_type={$post_type}" : 'post_ids'),
+						'posts_scanned' => count($post_ids),
+					);
+				}
+
+				$out = array(
+					'success'          => true,
+					'replacements'     => $total,
+					'updated_post_ids' => $updated_ids,
+					'posts_scanned'    => count($post_ids),
+				);
+				if (! empty($errors)) {
+					$out['errors'] = $errors;
+				}
+				return $out;
 			},
 			'meta'                => array(
 				'mcp' => array(
