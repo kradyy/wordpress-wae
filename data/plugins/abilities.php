@@ -1179,6 +1179,207 @@ function mcp_wp_register_delete_theme() {
 }
 
 /**
+ * Resolve one dynamic part file in the active theme.
+ *
+ * Header and footer markup lives in the theme, not in post content, so these
+ * two files are the only ones the abilities below may touch.
+ *
+ * @param string $part 'header' or 'footer'.
+ * @return string|WP_Error Absolute path.
+ */
+function mcp_wp_dynamic_part_path( string $part ) {
+	if ( ! in_array( $part, array( 'header', 'footer' ), true ) ) {
+		return new WP_Error( 'invalid_part', 'Part must be "header" or "footer".' );
+	}
+
+	$relative = '/parts/dynamic/dynamic-' . $part . '.php';
+
+	foreach ( array( get_stylesheet_directory(), get_template_directory() ) as $dir ) {
+		$path = $dir . $relative;
+		if ( file_exists( $path ) ) {
+			return $path;
+		}
+	}
+
+	return new WP_Error( 'part_not_found', 'The active theme has no ' . ltrim( $relative, '/' ) . '.' );
+}
+
+/**
+ * 29. Get Dynamic Part
+ */
+function mcp_wp_register_get_dynamic_part() {
+	wp_register_ability(
+		'mcp-wp/get-dynamic-part',
+		array(
+			'label'               => __( 'Get Dynamic Part', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Read the active theme\'s dynamic header or footer (parts/dynamic/dynamic-<part>.php). This is where the header and footer markup and their Tailwind classes live — they are not post content, so the page and pattern abilities cannot reach them. Read the part before editing it.', 'mcp-wp-capabilities' ),
+			'category'            => 'mcp-wp',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'part' => array( 'type' => 'string', 'enum' => array( 'header', 'footer' ), 'description' => 'Which part to read' ),
+				),
+				'required'   => array( 'part' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'path'    => array( 'type' => 'string' ),
+					'content' => array( 'type' => 'string' ),
+					'error'   => array( 'type' => 'string' ),
+				),
+			),
+			'permission_callback' => static function () {
+				return MCP_WP_Ability_Helpers::check_user_capability( 'manage_options' );
+			},
+			'execute_callback'    => static function ( array $input ) {
+				$path = mcp_wp_dynamic_part_path( sanitize_key( (string) $input['part'] ) );
+
+				if ( is_wp_error( $path ) ) {
+					return array(
+						'success' => false,
+						'error'   => $path->get_error_message(),
+					);
+				}
+
+				return array(
+					'success' => true,
+					'path'    => $path,
+					'content' => (string) file_get_contents( $path ),
+				);
+			},
+			'meta'                => array(
+				'mcp' => array(
+					'public' => true,
+					'type'   => 'tool',
+				),
+			),
+		)
+	);
+}
+
+/**
+ * 30. Edit Dynamic Part
+ */
+function mcp_wp_register_edit_dynamic_part() {
+	wp_register_ability(
+		'mcp-wp/edit-dynamic-part',
+		array(
+			'label'               => __( 'Edit Dynamic Part', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Replace an exact string in the active theme\'s dynamic header or footer. This is how header and footer styling is changed: the classes stay in the template file, where the part carries its own look. Read the part first with mcp-wp/get-dynamic-part and pass a search string that is unique enough, for example "bg-[rgba(255,255,255,0.9)] text-[#0f2a4a]". Every occurrence is replaced; set expected_matches to refuse the write when the count differs. The previous file is kept next to it as dynamic-<part>.php.bak.', 'mcp-wp-capabilities' ),
+			'category'            => 'mcp-wp',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'part'             => array( 'type' => 'string', 'enum' => array( 'header', 'footer' ), 'description' => 'Which part to edit' ),
+					'search'           => array( 'type' => 'string', 'description' => 'Exact string to find' ),
+					'replace'          => array( 'type' => 'string', 'description' => 'String to put in its place' ),
+					'expected_matches' => array( 'type' => 'integer', 'description' => 'Refuse the write unless the search occurs exactly this many times' ),
+				),
+				'required'   => array( 'part', 'search', 'replace' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'      => array( 'type' => 'boolean' ),
+					'path'         => array( 'type' => 'string' ),
+					'replacements' => array( 'type' => 'integer' ),
+					'error'        => array( 'type' => 'string' ),
+				),
+			),
+			'permission_callback' => static function () {
+				return MCP_WP_Ability_Helpers::check_user_capability( 'manage_options' );
+			},
+			'execute_callback'    => static function ( array $input ) {
+				// DISALLOW_FILE_EDIT is deliberately not consulted: it gates the admin
+				// file editor, and the sites that set it still have these two files
+				// written by the provisioning API. The write stays scoped to them.
+				$path = mcp_wp_dynamic_part_path( sanitize_key( (string) $input['part'] ) );
+
+				if ( is_wp_error( $path ) ) {
+					return array(
+						'success' => false,
+						'error'   => $path->get_error_message(),
+					);
+				}
+
+				if ( ! is_writable( $path ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'File is not writable: ' . $path,
+					);
+				}
+
+				$search  = (string) $input['search'];
+				$replace = (string) $input['replace'];
+
+				if ( '' === $search ) {
+					return array(
+						'success' => false,
+						'error'   => 'Search string must not be empty.',
+					);
+				}
+
+				$content = (string) file_get_contents( $path );
+				$found   = substr_count( $content, $search );
+
+				if ( isset( $input['expected_matches'] ) && (int) $input['expected_matches'] !== $found ) {
+					return array(
+						'success'      => false,
+						'replacements' => 0,
+						'error'        => sprintf( 'Expected %d match(es), found %d. Nothing was written.', (int) $input['expected_matches'], $found ),
+					);
+				}
+
+				if ( 0 === $found ) {
+					return array(
+						'success'      => false,
+						'replacements' => 0,
+						'error'        => 'Search string not found in ' . basename( $path ) . '.',
+					);
+				}
+
+				$updated = str_replace( $search, $replace, $content );
+
+				// A broken template takes the whole site down, so parse before writing.
+				try {
+					token_get_all( $updated, TOKEN_PARSE );
+				} catch ( ParseError $e ) {
+					return array(
+						'success'      => false,
+						'replacements' => 0,
+						'error'        => 'Result is not valid PHP: ' . $e->getMessage() . '. Nothing was written.',
+					);
+				}
+
+				copy( $path, $path . '.bak' );
+
+				if ( false === file_put_contents( $path, $updated ) ) {
+					return array(
+						'success'      => false,
+						'replacements' => 0,
+						'error'        => 'Could not write ' . $path,
+					);
+				}
+
+				return array(
+					'success'      => true,
+					'path'         => $path,
+					'replacements' => $found,
+				);
+			},
+			'meta'                => array(
+				'mcp' => array(
+					'public' => true,
+					'type'   => 'tool',
+				),
+			),
+		)
+	);
+}
+
+/**
  * Register all plugin abilities
  */
 function mcp_wp_register_plugins_abilities() {
@@ -1196,6 +1397,8 @@ function mcp_wp_register_plugins_abilities() {
 	mcp_wp_register_delete_theme();
 	mcp_wp_register_get_theme();
 	mcp_wp_register_get_theme_supports();
+	mcp_wp_register_get_dynamic_part();
+	mcp_wp_register_edit_dynamic_part();
 
 	// Load plugin-specific ability modules.
 	$plugin_modules = array(

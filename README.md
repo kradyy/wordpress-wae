@@ -144,6 +144,8 @@ Total: **86 abilities**
 - `mcp-wp/delete-plugin`
 - `mcp-wp/get-theme`
 - `mcp-wp/get-theme-supports`
+- `mcp-wp/get-dynamic-part`
+- `mcp-wp/edit-dynamic-part`
 - `mcp-wp/list-themes`
 - `mcp-wp/switch-theme`
 - `mcp-wp/install-theme`
