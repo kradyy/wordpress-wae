@@ -321,6 +321,15 @@ function mcp_wp_register_deactivate_plugin() {
 				$plugin_file = sanitize_text_field( $input['plugin_file'] );
 				deactivate_plugins( array( $plugin_file ) );
 
+				wp_cache_delete( 'alloptions', 'options' );
+				wp_cache_delete( 'active_plugins', 'options' );
+				if ( is_plugin_active( $plugin_file ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'Plugin is still active after deactivation (it may be forced active by another plugin or must-use code).',
+					);
+				}
+
 				return array(
 					'success' => true,
 					'message' => 'Plugin deactivated successfully',

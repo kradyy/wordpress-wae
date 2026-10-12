@@ -160,6 +160,7 @@ function mcp_wp_register_list_media() {
 
 				$query_args = array(
 					'post_type'      => 'attachment',
+					'post_status'    => 'inherit',
 					'posts_per_page' => $per_page,
 					'paged'          => $paged,
 					'orderby'        => 'date',

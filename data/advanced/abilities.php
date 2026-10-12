@@ -390,13 +390,19 @@ function mcp_wp_register_batch_update() {
 					try {
 						if ('post' === $type || 'page' === $type) {
 							$allowed = array( 'post_title', 'post_content', 'post_excerpt', 'post_status', 'post_date' );
-							$update = array( 'ID' => (int) $item['ID'] );
+							$post_id = absint( $item['ID'] ?? $item['id'] ?? $item['post_id'] ?? $item['page_id'] ?? 0 );
+							if ( ! $post_id || ! get_post( $post_id ) ) {
+								$failed++;
+								$errors[] = 'Post not found: ' . $post_id;
+								continue;
+							}
+							$update = array( 'ID' => $post_id );
 							foreach ( $allowed as $field ) {
 								if ( isset( $item[ $field ] ) ) {
 									$update[ $field ] = $item[ $field ];
 								}
 							}
-							$result = wp_update_post( wp_slash( $update ) );
+							$result = wp_update_post( wp_slash( $update ), true );
 							if (is_wp_error($result)) {
 								$failed++;
 								$errors[] = $result->get_error_message();
@@ -404,15 +410,18 @@ function mcp_wp_register_batch_update() {
 								$updated++;
 							}
 						} elseif ('term' === $type) {
-							$term_id = absint($item['id'] ?? 0);
-							if ($term_id) {
-								$result = wp_update_term( $term_id, $item['taxonomy'] ?? 'category', wp_slash( (array) $item ) );
-								if (is_wp_error($result)) {
-									$failed++;
-									$errors[] = $result->get_error_message();
-								} else {
-									$updated++;
-								}
+							$term_id = absint($item['id'] ?? $item['term_id'] ?? 0);
+							if (! $term_id) {
+								$failed++;
+								$errors[] = 'Missing term id';
+								continue;
+							}
+							$result = wp_update_term( $term_id, $item['taxonomy'] ?? 'category', wp_slash( (array) $item ) );
+							if (is_wp_error($result)) {
+								$failed++;
+								$errors[] = $result->get_error_message();
+							} else {
+								$updated++;
 							}
 						}
 					} catch (\Exception $e) {
