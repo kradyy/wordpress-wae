@@ -347,70 +347,6 @@ function mcp_wp_register_update_settings_allowlisted() {
 }
 
 /**
- * Custom CSS (core "Additional CSS", printed in wp_head by every theme).
- *
- * The only write path to markup that lives in theme files rather than in
- * post content — header and footer colours, for instance.
- */
-function mcp_wp_register_custom_css() {
-	wp_register_ability(
-		'mcp-wp/custom-css',
-		array(
-			'label'               => __( 'Custom CSS', 'mcp-wp-capabilities' ),
-			'description'         => __( 'Read or replace the theme\'s Additional CSS, printed in wp_head on every page. Use this to restyle markup that is not post content and therefore cannot be edited through the page/pattern abilities: header, footer and other theme templates. Omit "css" to read the current value; passing "css" replaces it in full, so read first and send the whole stylesheet back when you only want to add to it.', 'mcp-wp-capabilities' ),
-			'category'            => 'mcp-wp',
-			'input_schema'        => array(
-				'type'       => 'object',
-				'properties' => array(
-					'css' => array( 'type' => 'string', 'description' => 'Full stylesheet to store, replacing the current one. Omit to read.' ),
-				),
-			),
-			'output_schema'       => array(
-				'type'       => 'object',
-				'properties' => array(
-					'success' => array( 'type' => 'boolean' ),
-					'css'     => array( 'type' => 'string' ),
-					'error'   => array( 'type' => 'string' ),
-				),
-			),
-			'permission_callback' => static function () {
-				return MCP_WP_Ability_Helpers::check_user_capability( 'edit_theme_options' );
-			},
-			'execute_callback'    => static function ( array $input ) {
-				if ( ! isset( $input['css'] ) ) {
-					$post = wp_get_custom_css_post();
-
-					return array(
-						'success' => true,
-						'css'     => $post ? $post->post_content : '',
-					);
-				}
-
-				$saved = wp_update_custom_css_post( (string) $input['css'] );
-
-				if ( is_wp_error( $saved ) ) {
-					return array(
-						'success' => false,
-						'error'   => $saved->get_error_message(),
-					);
-				}
-
-				return array(
-					'success' => true,
-					'css'     => $saved->post_content,
-				);
-			},
-			'meta'                => array(
-				'mcp' => array(
-					'public' => true,
-					'type'   => 'tool',
-				),
-			),
-		)
-	);
-}
-
-/**
  * Register all settings abilities
  */
 function mcp_wp_register_settings_abilities() {
@@ -418,5 +354,4 @@ function mcp_wp_register_settings_abilities() {
 	mcp_wp_register_get_gutenberg_settings();
 	mcp_wp_register_get_site_stats();
 	mcp_wp_register_update_settings_allowlisted();
-	mcp_wp_register_custom_css();
 }
