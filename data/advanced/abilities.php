@@ -546,27 +546,35 @@ function mcp_wp_register_import_pattern() {
 					);
 				}
 
-				if (function_exists('register_block_pattern')) {
-					register_block_pattern(
-						sanitize_text_field($pattern_data['name']),
-						array(
-							'title'       => sanitize_text_field($pattern_data['title'] ?? 'Imported Pattern'),
-							'content'     => mcp_wp_kses_content($pattern_data['content']),
-							'category'    => sanitize_text_field($pattern_data['category'] ?? 'default'),
-							'description' => sanitize_text_field($pattern_data['description'] ?? ''),
-							'keywords'    => isset($pattern_data['keywords']) ? array_map('sanitize_text_field', (array) $pattern_data['keywords']) : array(),
-						)
-					);
-
+				if (! function_exists('mcp_wp_capabilities_upsert_pattern_post')) {
 					return array(
-						'success' => true,
-						'data'    => $pattern_data,
+						'success' => false,
+						'error'   => 'Persistent block patterns not supported in this environment',
+					);
+				}
+
+				// Persist like create-pattern does; register_block_pattern() only lasts for the current request.
+				$name    = sanitize_text_field($pattern_data['name']);
+				$payload = array(
+					'title'       => sanitize_text_field($pattern_data['title'] ?? 'Imported Pattern'),
+					'name'        => $name,
+					'content'     => mcp_wp_kses_content($pattern_data['content']),
+					'category'    => sanitize_text_field($pattern_data['category'] ?? 'default'),
+					'description' => sanitize_text_field($pattern_data['description'] ?? ''),
+					'keywords'    => isset($pattern_data['keywords']) ? array_map('sanitize_text_field', (array) $pattern_data['keywords']) : array(),
+				);
+
+				$result = mcp_wp_capabilities_upsert_pattern_post($name, $payload);
+				if (is_wp_error($result)) {
+					return array(
+						'success' => false,
+						'error'   => $result->get_error_message(),
 					);
 				}
 
 				return array(
-					'success' => false,
-					'error'   => 'Block patterns not supported',
+					'success' => true,
+					'data'    => $result,
 				);
 			},
 			'meta'                => array(

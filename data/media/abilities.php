@@ -188,7 +188,7 @@ function mcp_wp_register_list_media() {
 						return array(
 							'id'       => $post->ID,
 							'title'    => $post->post_title,
-							'filename' => basename( $post->guid ),
+							'filename' => basename( (string) ( get_attached_file( $post->ID ) ?: $post->guid ) ),
 							'url'      => wp_get_attachment_url( $post->ID ),
 							'type'     => $post->post_mime_type,
 							'date'     => $post->post_date_gmt,
@@ -252,21 +252,9 @@ function mcp_wp_register_get_media() {
 					);
 				}
 
-				$metadata = wp_get_attachment_metadata( $attachment_id );
-
 				return array(
 					'success' => true,
-					'data'    => array(
-						'id'       => $attachment->ID,
-						'title'    => $attachment->post_title,
-						'filename' => basename( $attachment->guid ),
-						'url'      => wp_get_attachment_url( $attachment->ID ),
-						'type'     => $attachment->post_mime_type,
-						'date'     => $attachment->post_date_gmt,
-						'width'    => $metadata['width'] ?? null,
-						'height'   => $metadata['height'] ?? null,
-						'sizes'    => $metadata['sizes'] ?? array(),
-					),
+					'data'    => mcp_wp_format_media_attachment_response( $attachment ),
 				);
 			},
 			'meta'                => array(
@@ -295,7 +283,7 @@ function mcp_wp_format_media_attachment_response( \WP_Post $attachment ): array 
 		'caption'     => (string) $attachment->post_excerpt,
 		'description' => (string) $attachment->post_content,
 		'alt_text'    => (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ),
-		'filename'    => basename( (string) $attachment->guid ),
+		'filename'    => basename( (string) ( get_attached_file( $attachment_id ) ?: $attachment->guid ) ),
 		'url'         => (string) wp_get_attachment_url( $attachment_id ),
 		'type'        => (string) $attachment->post_mime_type,
 		'date'        => (string) $attachment->post_date_gmt,
@@ -567,9 +555,12 @@ function mcp_wp_register_delete_media() {
 					);
 				}
 
+				// Without MEDIA_TRASH, WordPress deletes attachments permanently even when force is false.
+				$still_exists = (bool) get_post( $attachment_id );
+
 				return array(
 					'success' => true,
-					'message' => $force ? 'Media deleted permanently.' : 'Media moved to trash.',
+					'message' => ( $force || ! $still_exists ) ? 'Media deleted permanently.' : 'Media moved to trash.',
 				);
 			},
 			'meta'                => array(
