@@ -1221,7 +1221,7 @@ function mcp_wp_register_get_dynamic_part() {
 		'mcp-wp/get-dynamic-part',
 		array(
 			'label'               => __( 'Get Dynamic Part', 'mcp-wp-capabilities' ),
-			'description'         => __( 'Read the active theme\'s dynamic header or footer (parts/dynamic/dynamic-<part>.php). This is where the header and footer markup and their Tailwind classes live — they are not post content, so the page and pattern abilities cannot reach them. Read the part before editing it.', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Read the active theme\'s dynamic header or footer (parts/dynamic/dynamic-<part>.php) to understand its markup and classes. Read-only: header and footer are not changed through PHP; their options live in the site editor and ACF settings.', 'mcp-wp-capabilities' ),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -1269,24 +1269,270 @@ function mcp_wp_register_get_dynamic_part() {
 }
 
 /**
- * 30. Edit Dynamic Part
+ * Files the theme-file abilities may read, relative to the active theme root.
  */
-function mcp_wp_register_edit_dynamic_part() {
+const MCP_WP_THEME_FILE_ALLOWLIST = '#^(tailwind\.css|theme\.json|styles/[^/]+\.json|inc/(?!Vite/).+\.php|parts/.+\.(php|html)|patterns/.+\.php|templates/.+\.html)$#';
+
+/**
+ * Files the theme-file abilities may write. The site editor comes first, so
+ * this is the FSE file set plus one PHP file: inc/Theme/Ai.php is the only
+ * place site-specific code goes. tailwind.css is the uncompiled stylesheet the
+ * Tailwind JIT mu-plugin reads at runtime, so edits there need no build step.
+ */
+const MCP_WP_THEME_FILE_WRITE_ALLOWLIST = '#^(tailwind\.css|theme\.json|styles/[^/]+\.json|parts/.+\.html|templates/.+\.html|inc/Theme/Ai\.php)$#';
+
+const MCP_WP_THEME_AI_FILE = 'inc/Theme/Ai.php';
+
+/**
+ * Resolve a relative theme path against the allowlist.
+ *
+ * @param string $relative  Path relative to the theme root.
+ * @param bool   $must_exist Fail when the file is missing.
+ * @param bool   $for_write  Check the write allowlist instead of the read one.
+ * @return string|WP_Error Absolute path.
+ */
+function mcp_wp_theme_file_path( string $relative, bool $must_exist = true, bool $for_write = false ) {
+	$relative = ltrim( str_replace( '\\', '/', $relative ), '/' );
+
+	if ( '' === $relative || str_contains( $relative, '..' ) || ! preg_match( MCP_WP_THEME_FILE_ALLOWLIST, $relative ) ) {
+		return new WP_Error( 'path_not_allowed', 'Path must match tailwind.css, theme.json, styles/*.json, inc/**/*.php (not inc/Vite), parts/**, patterns/**/*.php or templates/**/*.html.' );
+	}
+
+	if ( $for_write && ! preg_match( MCP_WP_THEME_FILE_WRITE_ALLOWLIST, $relative ) ) {
+		return new WP_Error( 'path_read_only', $relative . ' is read-only. Writable: tailwind.css, theme.json, styles/*.json, parts/*.html, templates/*.html and ' . MCP_WP_THEME_AI_FILE . ' (the only PHP file; header, footer, patterns and other theme classes are not edited through PHP).' );
+	}
+
+	foreach ( array( get_stylesheet_directory(), get_template_directory() ) as $dir ) {
+		if ( file_exists( $dir . '/' . $relative ) ) {
+			return $dir . '/' . $relative;
+		}
+	}
+
+	if ( $must_exist ) {
+		return new WP_Error( 'file_not_found', 'The active theme has no ' . $relative . '.' );
+	}
+
+	return get_stylesheet_directory() . '/' . $relative;
+}
+
+/**
+ * Refuse to write PHP that does not parse: a broken file takes the site down.
+ *
+ * @return string|null Error message, null when fine.
+ */
+function mcp_wp_theme_file_parse_error( string $path, string $content ): ?string {
+	if ( 'php' !== strtolower( pathinfo( $path, PATHINFO_EXTENSION ) ) ) {
+		return null;
+	}
+	try {
+		token_get_all( $content, TOKEN_PARSE );
+	} catch ( ParseError $e ) {
+		return 'Result is not valid PHP: ' . $e->getMessage() . '. Nothing was written.';
+	}
+	return null;
+}
+
+/**
+ * Write a theme file, keeping the previous version next to it as <file>.bak.
+ *
+ * @return array<string,mixed> Ability result.
+ */
+function mcp_wp_write_theme_file( string $path, string $content ): array {
+	$error = mcp_wp_theme_file_parse_error( $path, $content );
+	if ( null !== $error ) {
+		return array( 'success' => false, 'error' => $error );
+	}
+
+	if ( file_exists( $path ) ) {
+		if ( ! is_writable( $path ) ) {
+			return array( 'success' => false, 'error' => 'File is not writable: ' . $path );
+		}
+		copy( $path, $path . '.bak' );
+	} elseif ( ! wp_mkdir_p( dirname( $path ) ) ) {
+		return array( 'success' => false, 'error' => 'Could not create ' . dirname( $path ) );
+	}
+
+	if ( false === file_put_contents( $path, $content ) ) {
+		return array( 'success' => false, 'error' => 'Could not write ' . $path );
+	}
+
+	return array( 'success' => true, 'path' => $path );
+}
+
+/**
+ * Make sure inc/Init.php instantiates Theme\Ai: sites created before the class
+ * shipped with the boilerplate have an Init.php without it.
+ *
+ * @return string|null Error message, null when registered.
+ */
+function mcp_wp_ensure_ai_class_registered(): ?string {
+	$init = mcp_wp_theme_file_path( 'inc/Init.php' );
+	if ( is_wp_error( $init ) ) {
+		return $init->get_error_message();
+	}
+
+	$content = (string) file_get_contents( $init );
+	if ( str_contains( $content, 'Theme\\Ai::class' ) ) {
+		return null;
+	}
+
+	$updated = preg_replace(
+		'/^(\t+)(Theme\\\\Extras::class,[^\n]*\n)/m',
+		"$1$2$1Theme\\\\Ai::class, // Site-specific hooks written by the Mild WP MCP (queries, pagination)\n",
+		$content,
+		1,
+		$count
+	);
+	if ( 1 !== $count ) {
+		return 'inc/Init.php has no Theme\\Extras::class line to register Theme\\Ai after. Ai.php was written but is not loaded until Init.php lists it.';
+	}
+
+	$result = mcp_wp_write_theme_file( $init, $updated );
+	return $result['success'] ? null : $result['error'];
+}
+
+/**
+ * Replace every occurrence of $search in a theme file.
+ *
+ * @return array<string,mixed> Ability result.
+ */
+function mcp_wp_replace_in_theme_file( string $path, string $search, string $replace, ?int $expected_matches ): array {
+	if ( '' === $search ) {
+		return array( 'success' => false, 'error' => 'Search string must not be empty.' );
+	}
+
+	$content = (string) file_get_contents( $path );
+	$found   = substr_count( $content, $search );
+
+	if ( null !== $expected_matches && $expected_matches !== $found ) {
+		return array(
+			'success'      => false,
+			'replacements' => 0,
+			'error'        => sprintf( 'Expected %d match(es), found %d. Nothing was written.', $expected_matches, $found ),
+		);
+	}
+
+	if ( 0 === $found ) {
+		return array(
+			'success'      => false,
+			'replacements' => 0,
+			'error'        => 'Search string not found in ' . basename( $path ) . '.',
+		);
+	}
+
+	$result = mcp_wp_write_theme_file( $path, str_replace( $search, $replace, $content ) );
+	$result['replacements'] = $result['success'] ? $found : 0;
+	return $result;
+}
+
+/**
+ * 31. List Theme Files
+ */
+function mcp_wp_register_list_theme_files() {
 	wp_register_ability(
-		'mcp-wp/edit-dynamic-part',
+		'mcp-wp/list-theme-files',
 		array(
-			'label'               => __( 'Edit Dynamic Part', 'mcp-wp-capabilities' ),
-			'description'         => __( 'Replace an exact string in the active theme\'s dynamic header or footer. This is how header and footer styling is changed: the classes stay in the template file, where the part carries its own look. Read the part first with mcp-wp/get-dynamic-part and pass a search string that is unique enough, for example "bg-[rgba(255,255,255,0.9)] text-[#0f2a4a]". Every occurrence is replaced; set expected_matches to refuse the write when the count differs. The previous file is kept next to it as dynamic-<part>.php.bak.', 'mcp-wp-capabilities' ),
+			'label'               => __( 'List Theme Files', 'mcp-wp-capabilities' ),
+			'description'         => __( 'List the active theme files the file abilities can read, as paths relative to the theme root. Only a subset is writable: tailwind.css (uncompiled stylesheet read at runtime by the Tailwind JIT, so CSS and @theme tokens take effect without a build), theme.json, styles/*.json, parts/*.html and templates/*.html (site editor files) and inc/Theme/Ai.php, the single file for site-specific PHP. Everything else (inc/**, parts/dynamic/*, patterns/**) is read-only. LAST RESORT: Gutenberg comes first for content, layout and block styling (search-replace-content, edit-page, patterns). Only touch theme files for what Gutenberg cannot control, and ask the user first when unsure.', 'mcp-wp-capabilities' ),
+			'category'            => 'mcp-wp',
+			'input_schema'        => array( 'type' => 'object', 'properties' => array() ),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'root'    => array( 'type' => 'string' ),
+					'files'   => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+				),
+			),
+			'permission_callback' => static function () {
+				return MCP_WP_Ability_Helpers::check_user_capability( 'manage_options' );
+			},
+			'execute_callback'    => static function () {
+				$root  = get_stylesheet_directory();
+				$files = array();
+				$it    = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $root, FilesystemIterator::SKIP_DOTS ) );
+				foreach ( $it as $file ) {
+					$relative = substr( $file->getPathname(), strlen( $root ) + 1 );
+					if ( ! str_contains( $relative, 'node_modules/' ) && preg_match( MCP_WP_THEME_FILE_ALLOWLIST, $relative ) ) {
+						$files[] = $relative;
+					}
+				}
+				sort( $files );
+
+				return array( 'success' => true, 'root' => $root, 'files' => $files );
+			},
+			'meta'                => array( 'mcp' => array( 'public' => true, 'type' => 'tool' ) ),
+		)
+	);
+}
+
+/**
+ * 32. Get Theme File
+ */
+function mcp_wp_register_get_theme_file() {
+	wp_register_ability(
+		'mcp-wp/get-theme-file',
+		array(
+			'label'               => __( 'Get Theme File', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Read one active theme file by path relative to the theme root (see mcp-wp/list-theme-files). Read a file before editing it with mcp-wp/edit-theme-file. LAST RESORT: Gutenberg comes first for content, layout and block styling (search-replace-content, edit-page, patterns). Only touch theme files for what Gutenberg cannot control, and ask the user first when unsure.', 'mcp-wp-capabilities' ),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
-					'part'             => array( 'type' => 'string', 'enum' => array( 'header', 'footer' ), 'description' => 'Which part to edit' ),
-					'search'           => array( 'type' => 'string', 'description' => 'Exact string to find' ),
-					'replace'          => array( 'type' => 'string', 'description' => 'String to put in its place' ),
-					'expected_matches' => array( 'type' => 'integer', 'description' => 'Refuse the write unless the search occurs exactly this many times' ),
+					'path' => array( 'type' => 'string', 'description' => 'Path relative to the theme root, e.g. "tailwind.css" or "inc/Theme/Extras.php"' ),
 				),
-				'required'   => array( 'part', 'search', 'replace' ),
+				'required'   => array( 'path' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'path'    => array( 'type' => 'string' ),
+					'content' => array( 'type' => 'string' ),
+					'error'   => array( 'type' => 'string' ),
+				),
+			),
+			'permission_callback' => static function () {
+				return MCP_WP_Ability_Helpers::check_user_capability( 'manage_options' );
+			},
+			'execute_callback'    => static function ( array $input ) {
+				$path = mcp_wp_theme_file_path( (string) $input['path'] );
+
+				if ( is_wp_error( $path ) ) {
+					return array( 'success' => false, 'error' => $path->get_error_message() );
+				}
+
+				return array(
+					'success' => true,
+					'path'    => $path,
+					'content' => (string) file_get_contents( $path ),
+				);
+			},
+			'meta'                => array( 'mcp' => array( 'public' => true, 'type' => 'tool' ) ),
+		)
+	);
+}
+
+/**
+ * 33. Edit Theme File
+ */
+function mcp_wp_register_edit_theme_file() {
+	wp_register_ability(
+		'mcp-wp/edit-theme-file',
+		array(
+			'label'               => __( 'Edit Theme File', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Edit or create one writable active theme file (see mcp-wp/list-theme-files). The site editor comes first: content, blocks, patterns, templates, template parts, header and footer are handled by the page, pattern and FSE abilities, never by PHP. PHP is allowed in exactly one file, inc/Theme/Ai.php (class Mild\\Theme\\Ai with a register() method; created and registered in inc/Init.php on first write), and only when code is genuinely necessary: posts per page per post type, query ordering or exclusions, pagination rules, rewrite rules. Never use it to register blocks or patterns or to change the header or footer, and ask the user first when unsure. Two modes: pass search + replace to replace an exact string (every occurrence; set expected_matches to refuse the write when the count differs), or pass content to write the whole file (creates it if missing). Custom CSS and Tailwind @theme tokens go in tailwind.css and apply immediately, no build. PHP is parsed before writing and refused when invalid. The previous version is kept next to the file as <file>.bak.', 'mcp-wp-capabilities' ),
+			'category'            => 'mcp-wp',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'path'             => array( 'type' => 'string', 'description' => 'Path relative to the theme root, e.g. "tailwind.css" or "inc/Theme/Ai.php"' ),
+					'search'           => array( 'type' => 'string', 'description' => 'Exact string to find (search/replace mode)' ),
+					'replace'          => array( 'type' => 'string', 'description' => 'String to put in its place (search/replace mode)' ),
+					'expected_matches' => array( 'type' => 'integer', 'description' => 'Refuse the write unless the search occurs exactly this many times' ),
+					'content'          => array( 'type' => 'string', 'description' => 'Full new file content (write mode, creates the file if missing)' ),
+				),
+				'required'   => array( 'path' ),
 			),
 			'output_schema'       => array(
 				'type'       => 'object',
@@ -1294,6 +1540,7 @@ function mcp_wp_register_edit_dynamic_part() {
 					'success'      => array( 'type' => 'boolean' ),
 					'path'         => array( 'type' => 'string' ),
 					'replacements' => array( 'type' => 'integer' ),
+					'warning'      => array( 'type' => 'string' ),
 					'error'        => array( 'type' => 'string' ),
 				),
 			),
@@ -1301,89 +1548,36 @@ function mcp_wp_register_edit_dynamic_part() {
 				return MCP_WP_Ability_Helpers::check_user_capability( 'manage_options' );
 			},
 			'execute_callback'    => static function ( array $input ) {
-				// DISALLOW_FILE_EDIT is deliberately not consulted: it gates the admin
-				// file editor, and the sites that set it still have these two files
-				// written by the provisioning API. The write stays scoped to them.
-				$path = mcp_wp_dynamic_part_path( sanitize_key( (string) $input['part'] ) );
+				$write_mode = isset( $input['content'] );
+				$path       = mcp_wp_theme_file_path( (string) $input['path'], ! $write_mode, true );
 
 				if ( is_wp_error( $path ) ) {
-					return array(
-						'success' => false,
-						'error'   => $path->get_error_message(),
+					return array( 'success' => false, 'error' => $path->get_error_message() );
+				}
+
+				if ( $write_mode ) {
+					$result = mcp_wp_write_theme_file( $path, (string) $input['content'] );
+				} elseif ( ! isset( $input['search'], $input['replace'] ) ) {
+					return array( 'success' => false, 'error' => 'Pass search + replace, or content.' );
+				} else {
+					$result = mcp_wp_replace_in_theme_file(
+						$path,
+						(string) $input['search'],
+						(string) $input['replace'],
+						isset( $input['expected_matches'] ) ? (int) $input['expected_matches'] : null
 					);
 				}
 
-				if ( ! is_writable( $path ) ) {
-					return array(
-						'success' => false,
-						'error'   => 'File is not writable: ' . $path,
-					);
+				if ( $result['success'] && str_ends_with( $path, '/' . MCP_WP_THEME_AI_FILE ) ) {
+					$warning = mcp_wp_ensure_ai_class_registered();
+					if ( null !== $warning ) {
+						$result['warning'] = $warning;
+					}
 				}
 
-				$search  = (string) $input['search'];
-				$replace = (string) $input['replace'];
-
-				if ( '' === $search ) {
-					return array(
-						'success' => false,
-						'error'   => 'Search string must not be empty.',
-					);
-				}
-
-				$content = (string) file_get_contents( $path );
-				$found   = substr_count( $content, $search );
-
-				if ( isset( $input['expected_matches'] ) && (int) $input['expected_matches'] !== $found ) {
-					return array(
-						'success'      => false,
-						'replacements' => 0,
-						'error'        => sprintf( 'Expected %d match(es), found %d. Nothing was written.', (int) $input['expected_matches'], $found ),
-					);
-				}
-
-				if ( 0 === $found ) {
-					return array(
-						'success'      => false,
-						'replacements' => 0,
-						'error'        => 'Search string not found in ' . basename( $path ) . '.',
-					);
-				}
-
-				$updated = str_replace( $search, $replace, $content );
-
-				// A broken template takes the whole site down, so parse before writing.
-				try {
-					token_get_all( $updated, TOKEN_PARSE );
-				} catch ( ParseError $e ) {
-					return array(
-						'success'      => false,
-						'replacements' => 0,
-						'error'        => 'Result is not valid PHP: ' . $e->getMessage() . '. Nothing was written.',
-					);
-				}
-
-				copy( $path, $path . '.bak' );
-
-				if ( false === file_put_contents( $path, $updated ) ) {
-					return array(
-						'success'      => false,
-						'replacements' => 0,
-						'error'        => 'Could not write ' . $path,
-					);
-				}
-
-				return array(
-					'success'      => true,
-					'path'         => $path,
-					'replacements' => $found,
-				);
+				return $result;
 			},
-			'meta'                => array(
-				'mcp' => array(
-					'public' => true,
-					'type'   => 'tool',
-				),
-			),
+			'meta'                => array( 'mcp' => array( 'public' => true, 'type' => 'tool' ) ),
 		)
 	);
 }
@@ -1407,7 +1601,9 @@ function mcp_wp_register_plugins_abilities() {
 	mcp_wp_register_get_theme();
 	mcp_wp_register_get_theme_supports();
 	mcp_wp_register_get_dynamic_part();
-	mcp_wp_register_edit_dynamic_part();
+	mcp_wp_register_list_theme_files();
+	mcp_wp_register_get_theme_file();
+	mcp_wp_register_edit_theme_file();
 
 	// Load plugin-specific ability modules.
 	$plugin_modules = array(

@@ -74,6 +74,29 @@ function mcp_wp_capabilities_init() {
 }
 add_action( 'plugins_loaded', 'mcp_wp_capabilities_init' );
 
+/**
+ * Server-level instructions. The MCP adapter sends server_description as the
+ * `instructions` field of the initialize response, so every client sees it.
+ */
+add_filter(
+	'mcp_adapter_default_server_config',
+	static function ( array $config ): array {
+		$config['server_description'] = implode(
+			"\n",
+			array(
+				'WordPress site abilities for Mild WP. Call mcp-adapter-execute-ability with ability_name and parameters.',
+				'',
+				'RULES OF ENGAGEMENT',
+				'1. Gutenberg first, always. Content and layout changes (text, images, sections, blocks, patterns, menus, block classes and block styles) are done through the page, post, pattern, menu and block abilities: mcp-wp/search-replace-content, edit-page, edit-post, patterns, block entities. This covers 99% of requests.',
+				'2. Theme files (mcp-wp/edit-theme-file, edit-dynamic-part) are a last resort, only for what Gutenberg cannot control: the dynamic header/footer, theme PHP classes in inc/, or genuinely global CSS and @theme tokens in tailwind.css. Never write CSS to style something that could be changed by editing the block or its classes.',
+				'3. When uncertain whether a change belongs in Gutenberg or in a theme file, stop and ask the user before writing anything. Do not guess.',
+				'4. Read before you write (get-page, get-theme-file), make the smallest exact search/replace, and set expected_matches so a wrong match never writes.',
+			)
+		);
+		return $config;
+	}
+);
+
 // Also register callbacks on rest_api_init to ensure they're registered in time
 add_action(
 	'rest_api_init',

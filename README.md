@@ -144,8 +144,10 @@ Total: **86 abilities**
 - `mcp-wp/delete-plugin`
 - `mcp-wp/get-theme`
 - `mcp-wp/get-theme-supports`
-- `mcp-wp/get-dynamic-part`
-- `mcp-wp/edit-dynamic-part`
+- `mcp-wp/get-dynamic-part` (read-only)
+- `mcp-wp/list-theme-files`
+- `mcp-wp/get-theme-file`
+- `mcp-wp/edit-theme-file` (writes limited to tailwind.css, theme.json, styles/*.json, parts/*.html, templates/*.html and `inc/Theme/Ai.php`, the only PHP file; it is created and registered in `inc/Init.php` on first write. Site editor first: PHP only for queries, pagination and rewrite rules, never for blocks, patterns, header or footer)
 - `mcp-wp/list-themes`
 - `mcp-wp/switch-theme`
 - `mcp-wp/install-theme`
