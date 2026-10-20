@@ -144,10 +144,13 @@ Total: **86 abilities**
 - `mcp-wp/delete-plugin`
 - `mcp-wp/get-theme`
 - `mcp-wp/get-theme-supports`
-- `mcp-wp/get-dynamic-part` (read-only)
+- `mcp-wp/get-dynamic-part`
+- `mcp-wp/edit-dynamic-part`
 - `mcp-wp/list-theme-files`
 - `mcp-wp/get-theme-file`
-- `mcp-wp/edit-theme-file` (writes limited to tailwind.css, theme.json, styles/*.json, parts/*.html, templates/*.html and `inc/Theme/Ai.php`, the only PHP file; it is created and registered in `inc/Init.php` on first write. Site editor first: PHP only for queries, pagination and rewrite rules, never for blocks, patterns, header or footer)
+- `mcp-wp/edit-theme-file` (writes limited to tailwind.css, theme.json, styles/*.json, parts/*.html, templates/*.html and `inc/Theme/Ai.php`, the only PHP file; it is created and registered in `inc/Init.php` on first write. Site editor first: PHP only for queries, pagination and rewrite rules, never for blocks or patterns; header and footer go through edit-dynamic-part)
+
+Both write abilities take a required `summary`. The API proxy on the host commits every theme file write to the site's theme repo (`wp-content/themes/mild-boilerplate`, initialised on first write) as `ai-mcp: <summary>`, with the changed files in the commit body. PHP cannot commit itself: it runs in a container without git.
 - `mcp-wp/list-themes`
 - `mcp-wp/switch-theme`
 - `mcp-wp/install-theme`

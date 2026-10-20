@@ -1221,7 +1221,7 @@ function mcp_wp_register_get_dynamic_part() {
 		'mcp-wp/get-dynamic-part',
 		array(
 			'label'               => __( 'Get Dynamic Part', 'mcp-wp-capabilities' ),
-			'description'         => __( 'Read the active theme\'s dynamic header or footer (parts/dynamic/dynamic-<part>.php) to understand its markup and classes. Read-only: header and footer are not changed through PHP; their options live in the site editor and ACF settings.', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Read the active theme\'s dynamic header or footer (parts/dynamic/dynamic-<part>.php). This is where the header and footer markup and their Tailwind classes live — they are not post content, so the page and pattern abilities cannot reach them. Read the part before editing it.', 'mcp-wp-capabilities' ),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -1269,6 +1269,69 @@ function mcp_wp_register_get_dynamic_part() {
 }
 
 /**
+ * 30. Edit Dynamic Part
+ */
+function mcp_wp_register_edit_dynamic_part() {
+	wp_register_ability(
+		'mcp-wp/edit-dynamic-part',
+		array(
+			'label'               => __( 'Edit Dynamic Part', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Replace an exact string in the active theme\'s dynamic header or footer. This is how header and footer styling is changed: the classes stay in the template file, where the part carries its own look. Read the part first with mcp-wp/get-dynamic-part and pass a search string that is unique enough, for example "bg-[rgba(255,255,255,0.9)] text-[#0f2a4a]". Every occurrence is replaced; set expected_matches to refuse the write when the count differs. The previous file is kept next to it as dynamic-<part>.php.bak.', 'mcp-wp-capabilities' ),
+			'category'            => 'mcp-wp',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'part'             => array( 'type' => 'string', 'enum' => array( 'header', 'footer' ), 'description' => 'Which part to edit' ),
+					'search'           => array( 'type' => 'string', 'description' => 'Exact string to find' ),
+					'replace'          => array( 'type' => 'string', 'description' => 'String to put in its place' ),
+					'expected_matches' => array( 'type' => 'integer', 'description' => 'Refuse the write unless the search occurs exactly this many times' ),
+					'summary'          => array( 'type' => 'string', 'description' => 'One line describing the change in plain words, e.g. "Darker header background and white menu text". Becomes the git commit message "ai-mcp: <summary>" in the site\'s theme repo.' ),
+				),
+				'required'   => array( 'part', 'search', 'replace', 'summary' ),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'      => array( 'type' => 'boolean' ),
+					'path'         => array( 'type' => 'string' ),
+					'replacements' => array( 'type' => 'integer' ),
+					'error'        => array( 'type' => 'string' ),
+				),
+			),
+			'permission_callback' => static function () {
+				return MCP_WP_Ability_Helpers::check_user_capability( 'manage_options' );
+			},
+			'execute_callback'    => static function ( array $input ) {
+				// DISALLOW_FILE_EDIT is deliberately not consulted: it gates the admin
+				// file editor, and the sites that set it still have these two files
+				// written by the provisioning API. The write stays scoped to them.
+				$path = mcp_wp_dynamic_part_path( sanitize_key( (string) $input['part'] ) );
+
+				if ( is_wp_error( $path ) ) {
+					return array(
+						'success' => false,
+						'error'   => $path->get_error_message(),
+					);
+				}
+
+				return mcp_wp_replace_in_theme_file(
+					$path,
+					(string) $input['search'],
+					(string) $input['replace'],
+					isset( $input['expected_matches'] ) ? (int) $input['expected_matches'] : null
+				);
+			},
+			'meta'                => array(
+				'mcp' => array(
+					'public' => true,
+					'type'   => 'tool',
+				),
+			),
+		)
+	);
+}
+
+/**
  * Files the theme-file abilities may read, relative to the active theme root.
  */
 const MCP_WP_THEME_FILE_ALLOWLIST = '#^(tailwind\.css|theme\.json|styles/[^/]+\.json|inc/(?!Vite/).+\.php|parts/.+\.(php|html)|patterns/.+\.php|templates/.+\.html)$#';
@@ -1299,7 +1362,7 @@ function mcp_wp_theme_file_path( string $relative, bool $must_exist = true, bool
 	}
 
 	if ( $for_write && ! preg_match( MCP_WP_THEME_FILE_WRITE_ALLOWLIST, $relative ) ) {
-		return new WP_Error( 'path_read_only', $relative . ' is read-only. Writable: tailwind.css, theme.json, styles/*.json, parts/*.html, templates/*.html and ' . MCP_WP_THEME_AI_FILE . ' (the only PHP file; header, footer, patterns and other theme classes are not edited through PHP).' );
+		return new WP_Error( 'path_read_only', $relative . ' is read-only. Writable: tailwind.css, theme.json, styles/*.json, parts/*.html, templates/*.html and ' . MCP_WP_THEME_AI_FILE . ' (the only PHP file for site code). The dynamic header and footer are edited with mcp-wp/edit-dynamic-part; patterns and other theme classes are read-only.' );
 	}
 
 	foreach ( array( get_stylesheet_directory(), get_template_directory() ) as $dir ) {
@@ -1433,7 +1496,7 @@ function mcp_wp_register_list_theme_files() {
 		'mcp-wp/list-theme-files',
 		array(
 			'label'               => __( 'List Theme Files', 'mcp-wp-capabilities' ),
-			'description'         => __( 'List the active theme files the file abilities can read, as paths relative to the theme root. Only a subset is writable: tailwind.css (uncompiled stylesheet read at runtime by the Tailwind JIT, so CSS and @theme tokens take effect without a build), theme.json, styles/*.json, parts/*.html and templates/*.html (site editor files) and inc/Theme/Ai.php, the single file for site-specific PHP. Everything else (inc/**, parts/dynamic/*, patterns/**) is read-only. LAST RESORT: Gutenberg comes first for content, layout and block styling (search-replace-content, edit-page, patterns). Only touch theme files for what Gutenberg cannot control, and ask the user first when unsure.', 'mcp-wp-capabilities' ),
+			'description'         => __( 'List the active theme files the file abilities can read, as paths relative to the theme root. Only a subset is writable: tailwind.css (uncompiled stylesheet read at runtime by the Tailwind JIT, so CSS and @theme tokens take effect without a build), theme.json, styles/*.json, parts/*.html and templates/*.html (site editor files) and inc/Theme/Ai.php, the single file for site-specific PHP. The dynamic header and footer (parts/dynamic/*.php) are edited with mcp-wp/edit-dynamic-part. Everything else (inc/**, patterns/**) is read-only. LAST RESORT: Gutenberg comes first for content, layout and block styling (search-replace-content, edit-page, patterns). Only touch theme files for what Gutenberg cannot control, and ask the user first when unsure.', 'mcp-wp-capabilities' ),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array( 'type' => 'object', 'properties' => array() ),
 			'output_schema'       => array(
@@ -1521,7 +1584,7 @@ function mcp_wp_register_edit_theme_file() {
 		'mcp-wp/edit-theme-file',
 		array(
 			'label'               => __( 'Edit Theme File', 'mcp-wp-capabilities' ),
-			'description'         => __( 'Edit or create one writable active theme file (see mcp-wp/list-theme-files). The site editor comes first: content, blocks, patterns, templates, template parts, header and footer are handled by the page, pattern and FSE abilities, never by PHP. PHP is allowed in exactly one file, inc/Theme/Ai.php (class Mild\\Theme\\Ai with a register() method; created and registered in inc/Init.php on first write), and only when code is genuinely necessary: posts per page per post type, query ordering or exclusions, pagination rules, rewrite rules. Never use it to register blocks or patterns or to change the header or footer, and ask the user first when unsure. Two modes: pass search + replace to replace an exact string (every occurrence; set expected_matches to refuse the write when the count differs), or pass content to write the whole file (creates it if missing). Custom CSS and Tailwind @theme tokens go in tailwind.css and apply immediately, no build. PHP is parsed before writing and refused when invalid. The previous version is kept next to the file as <file>.bak.', 'mcp-wp-capabilities' ),
+			'description'         => __( 'Edit or create one writable active theme file (see mcp-wp/list-theme-files). The site editor comes first: content, blocks, patterns, templates, template parts, header and footer are handled by the page, pattern and FSE abilities, never by PHP. PHP is allowed in exactly one file, inc/Theme/Ai.php (class Mild\\Theme\\Ai with a register() method; created and registered in inc/Init.php on first write), and only when code is genuinely necessary: posts per page per post type, query ordering or exclusions, pagination rules, rewrite rules. Never use it to register blocks or patterns; header and footer markup is changed with mcp-wp/edit-dynamic-part, not here. Ask the user first when unsure. Two modes: pass search + replace to replace an exact string (every occurrence; set expected_matches to refuse the write when the count differs), or pass content to write the whole file (creates it if missing). Custom CSS and Tailwind @theme tokens go in tailwind.css and apply immediately, no build. PHP is parsed before writing and refused when invalid. The previous version is kept next to the file as <file>.bak.', 'mcp-wp-capabilities' ),
 			'category'            => 'mcp-wp',
 			'input_schema'        => array(
 				'type'       => 'object',
@@ -1531,8 +1594,9 @@ function mcp_wp_register_edit_theme_file() {
 					'replace'          => array( 'type' => 'string', 'description' => 'String to put in its place (search/replace mode)' ),
 					'expected_matches' => array( 'type' => 'integer', 'description' => 'Refuse the write unless the search occurs exactly this many times' ),
 					'content'          => array( 'type' => 'string', 'description' => 'Full new file content (write mode, creates the file if missing)' ),
+					'summary'          => array( 'type' => 'string', 'description' => 'One line describing the change in plain words, e.g. "Fade-up animation on the front page hero". Becomes the git commit message "ai-mcp: <summary>" in the site\'s theme repo.' ),
 				),
-				'required'   => array( 'path' ),
+				'required'   => array( 'path', 'summary' ),
 			),
 			'output_schema'       => array(
 				'type'       => 'object',
@@ -1601,6 +1665,7 @@ function mcp_wp_register_plugins_abilities() {
 	mcp_wp_register_get_theme();
 	mcp_wp_register_get_theme_supports();
 	mcp_wp_register_get_dynamic_part();
+	mcp_wp_register_edit_dynamic_part();
 	mcp_wp_register_list_theme_files();
 	mcp_wp_register_get_theme_file();
 	mcp_wp_register_edit_theme_file();
